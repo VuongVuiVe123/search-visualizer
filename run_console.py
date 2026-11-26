@@ -1,6 +1,6 @@
-"""Chạy thuật toán ngay trong cửa sổ dòng lệnh, không cần giao diện (giống notebook trên lớp).
+"""Chạy thuật toán ngay trong cửa sổ dòng lệnh, không cần giao diện (giống bài trên lớp).
 
-    python run_console.py                  DFS, robot hút bụi (giống notebook vacuum_DFS.ipynb)
+    python run_console.py                  DFS, robot hút bụi (giống bài trên lớp)
     python run_console.py bfs              BFS, robot hút bụi
     python run_console.py dfs puzzle8      DFS, 8-puzzle
 
