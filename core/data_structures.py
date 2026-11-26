@@ -1,4 +1,4 @@
-"""Cấu trúc dữ liệu cho frontier (giống code trên lớp).
+"""Cấu trúc dữ liệu cho frontier.
 
     Stack (ngăn xếp, LIFO: vào sau ra trước)  -> dùng cho DFS
     Queue (hàng đợi, FIFO: vào trước ra trước) -> dùng cho BFS

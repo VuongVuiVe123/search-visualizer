@@ -1,12 +1,12 @@
-"""Bài toán 8-puzzle (giống code trên lớp): bàn 3x3, 8 ô số và 1 ô trống (số 0).
+"""Bài toán 8-puzzle: bàn 3x3, 8 ô số và 1 ô trống (số 0).
 Trượt ô trống để về trạng thái đích.
 
 Trạng thái là bàn cờ 3x3, mỗi hàng một bộ số:
     ((1, 2, 3),
      (4, 0, 6),      <- 0 là ô trống
      (7, 5, 8))
-Trên lớp dùng list [[1, 2, 3], ...]; ở đây dùng tuple (không sửa được) để giao diện có thể
-dùng trạng thái làm khóa khi lưu hình đã vẽ. Cách làm còn lại giữ nguyên như trên lớp.
+Dùng tuple (không sửa được) thay vì list để giao diện có thể dùng trạng thái làm khóa
+khi lưu hình đã vẽ.
 """
 import random
 
@@ -34,8 +34,8 @@ PRESETS = {
     ],
     "dfs": [
         ("34 bước", ((4, 1, 3), (2, 5, 6), (0, 7, 8))),
-        ("Trên lớp", INITIAL_STATE),
         ("292 bước", ((2, 3, 0), (1, 4, 6), (7, 5, 8))),
+        ("320 bước", INITIAL_STATE),
     ],
 }
 DEFAULT_PRESET = 1   # bài mẫu được mở sẵn khi vào trang (đếm từ 0)
@@ -93,7 +93,7 @@ def result_8puzzle(state, action):
 
 
 # =====================================================================
-# 4. TẠO PROBLEM (giống trên lớp: Problem(initial, goal, actions_8puzzle, result_8puzzle))
+# 4. TẠO PROBLEM: Problem(initial, goal, actions_8puzzle, result_8puzzle)
 # =====================================================================
 
 def make_problem(initial_state=INITIAL_STATE, goal_state=GOAL_STATE):

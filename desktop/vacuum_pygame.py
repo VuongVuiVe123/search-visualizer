@@ -60,7 +60,7 @@ def make_goal(n, pos):
 # =====================================================================
 # Lấy thuật toán, bài toán và bộ ghi từ các thư mục chung của dự án.
 # Tệp này CHỈ VẼ, không tự viết lại thuật toán:
-#   core/algorithms/    BFS, DFS (giống trên lớp)
+#   core/algorithms/    BFS, DFS
 #   problems/vacuum.py  trạng thái đầu, đích, bài mẫu, actions_vacuum, result_vacuum
 #   tracing/            ghi lại từng dòng code đang chạy để vẽ
 # =====================================================================

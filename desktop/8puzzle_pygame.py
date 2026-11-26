@@ -38,7 +38,7 @@ TOKEN = re.compile(r"(?P<kw>\b(?:def|if|for|while|not|in|return|and)\b)|(?P<fn>\
 # =====================================================================
 # Lấy thuật toán, bài toán và bộ ghi từ các thư mục chung của dự án.
 # Tệp này CHỈ VẼ, không tự viết lại thuật toán:
-#   core/algorithms/   BFS, DFS (giống trên lớp)
+#   core/algorithms/   BFS, DFS
 #   problems/puzzle8.py  trạng thái đầu, đích, bài mẫu, actions, result
 #   tracing/           ghi lại từng dòng code đang chạy để vẽ
 # =====================================================================
@@ -333,12 +333,14 @@ class App:
             if key == "slow":
                 bx += 56
         self.speed_x = [b for b in self.buttons if b.key == "slow"][0].rect.right + 6
-        bx = 800
+        bx = 690
         for i, (lab, _) in enumerate(PRESETS):
             self.buttons.append(Button((bx, 846, 84, 40), lab, f"p{i}"))
             bx += 92
         self.buttons.append(Button((bx, 846, 104, 40), "Tự đặt", "edit"))
         self.buttons.append(Button((bx + 112, 846, 128, 40), "Ngẫu nhiên", "rand"))
+        self.buttons.append(Button((bx + 248, 846, 140, 40), "Chạy lời giải", "replay"))
+        self.replay = None
         self.algo_rects = {"bfs": pygame.Rect(472, 16, 214, 52), "dfs": pygame.Rect(694, 16, 214, 52)}
         self.acc = list(ALGO_COL[self.algo])
         self.sw_x = float(self.algo_rects[self.algo].x)
@@ -388,6 +390,7 @@ class App:
         return PRESETS if self.algo == "bfs" else PRESETS_DFS
 
     def load(self, init, goal=GOAL):
+        self.replay = None
         self.goal = goal
         self.rec = Rec(init, goal, self.algo)
         self.events = self.rec.events
@@ -453,6 +456,38 @@ class App:
             self.load(s, self.goal)
         elif key == "edit":
             self.open_editor()
+        elif key == "replay":
+            self.start_replay()
+
+    def start_replay(self):
+        """Chạy lời giải: bàn cờ lớn trượt lần lượt từng nước từ trạng thái đầu tới đích."""
+        if self.replay:
+            self.replay = None
+            return
+        if not self.rec.solution:
+            self.toast = ("Chưa có lời giải để chạy.", 3.0)
+            return
+        self.playing = False
+        self.seek(len(self.events) - 1)
+        self.replay = dict(states=[self.rec.nodes[e]["state"] for e in self.rec.path], t=0.0, step=0.8, k=-1)
+
+    def update_replay(self, dt):
+        rp, nb = self.replay, self.node_board
+        last = len(rp["states"]) - 1
+        rp["t"] += dt * min(8.0, max(1.0, self.speed()))
+        k = min(last, int(rp["t"] / rp["step"]))
+        if k != rp["k"]:
+            if rp["k"] < 0:
+                nb.state, nb.pos = None, {}
+                nb.set_state(rp["states"][0])
+                for i, v in enumerate(nb.state):
+                    if v:
+                        nb.pos[v] = list(nb.slot(i))
+            else:
+                nb.set_state(rp["states"][k])
+            rp["k"] = k
+        if k >= last and rp["t"] > last * rp["step"] + 1.6:
+            self.replay = None
 
     def set_algo(self, algo):
         if algo == self.algo:
@@ -480,6 +515,7 @@ class App:
                            self.ED_CELL, self.ED_CELL)
 
     def open_editor(self):
+        self.replay = None
         self.playing = False
         self.editing = True
         self.ed = dict(init=list(flat(self.rec.init)), goal=list(flat(self.goal)), sel=None)
@@ -615,7 +651,10 @@ class App:
                     break
                 self.ev_t -= self.ev["dur"]
                 self.ev_i += 1
-        self.sync_boards()
+        if self.replay:
+            self.update_replay(dt)
+        else:
+            self.sync_boards()
         self.node_board.update(dt)
         self.child_board.update(dt)
         ev = self.ev
@@ -889,7 +928,33 @@ class App:
             ty = view.y + (view.h - th) * (self.scroll / max(1, self.ttotal - view.h))
             G.rect(s, PANEL_L, (TAB.right - 8, ty, 4, th), border_radius=2)
 
+    def draw_replay(self, s):
+        rp, nb, sol = self.replay, self.node_board, self.rec.solution
+        k, n = max(0, rp["k"]), len(rp["states"]) - 1
+        glyphs = {"Lên": "↑", "Xuống": "↓", "Trái": "←", "Phải": "→"}
+        panel(s, RIGHT, "chạy lời giải", GOLD)
+        text(s, "ĐÃ TỚI ĐÍCH" if k == n else f"bước {k} / {n}", font("segoeui", 15, True), GOLD,
+             (RIGHT.centerx, nb.y - 20), "midtop")
+        nb.draw(s, GREEN if k == n else GOLD)
+        act = sol[k - 1] if k >= 1 else None
+        r = pygame.Rect(0, 0, 148, 30)
+        r.midtop = (RIGHT.centerx, nb.y + nb.size + 12)
+        G.rect(s, shade(GOLD, 0.3), r, border_radius=15)
+        G.rect(s, GOLD, r, 2, border_radius=15)
+        text(s, f"{glyphs[act]}  {act}" if act else "trạng thái đầu", font("segoeui", 18, True), GOLD, r.center, "center")
+        by, bw = r.bottom + 22, RIGHT.w - 48
+        G.rect(s, PANEL_L, (RIGHT.x + 24, by, bw, 8), border_radius=4)
+        G.rect(s, GOLD, (RIGHT.x + 24, by, max(8, bw * k / max(1, n)), 8), border_radius=4)
+        text(s, "các nước tiếp theo", font("segoeui", 13, True), MUTED, (RIGHT.x + 24, by + 22))
+        nxt = "  ".join(glyphs[a] for a in sol[k:k + 12]) or "—"
+        text(s, nxt, font("segoeui", 18, True), TEXT, (RIGHT.x + 24, by + 44))
+        text(s, f"Lời giải {n} bước · bấm \"Dừng\" hoặc phím V để thoát", font("segoeui", 12), MUTED,
+             (RIGHT.centerx, RIGHT.bottom - 28), "midtop")
+
     def draw_right(self, s, ev, p):
+        if self.replay:
+            self.draw_replay(s)
+            return
         panel(s, RIGHT, "nút đang xét", ORANGE)
         nb, cb = self.node_board, self.child_board
         text(s, "node", font("segoeui", 15, True), ORANGE, (nb.x - 2, nb.y - 20))
@@ -1004,7 +1069,10 @@ class App:
         self.bar_rect = bar
         mouse = self.mouse
         for b in self.buttons:
-            b.active = (b.key == "play" and self.playing) or (b.key == f"p{self.preset}") or (b.key == "alg_" + self.algo)
+            b.active = (b.key == "play" and self.playing) or (b.key == f"p{self.preset}") or (b.key == "alg_" + self.algo) \
+                or (b.key == "replay" and bool(self.replay))
+            if b.key == "replay":
+                b.label = "Dừng" if self.replay else "Chạy lời giải"
             if b.key.startswith("p") and b.key[1:].isdigit():
                 b.label = self.presets[int(b.key[1:])][0]
             if b.key == "play":
@@ -1052,6 +1120,7 @@ class App:
                         else:
                             self.win = pygame.display.set_mode(self.win_size, pygame.RESIZABLE)
                     elif k == pygame.K_t: self.press("edit")
+                    elif k == pygame.K_v: self.press("replay")
                     elif k == pygame.K_b: self.press("alg_bfs")
                     elif k == pygame.K_d: self.press("alg_dfs")
                     elif pygame.K_1 <= k <= pygame.K_3: self.press(f"p{k - pygame.K_1}")
