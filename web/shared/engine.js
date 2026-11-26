@@ -3,7 +3,10 @@
 /* ============================================================================
    Engine dùng chung: canvas sắc nét, cầu nối Python (Pyodide), bộ phát sự kiện
    và các khung chung (code sáng dòng, bảng node, frontier, explored, điều khiển).
-   Mỗi bài toán chỉ cần viết một "view" (xem puzzle8/view.js, vacuum/view.js).
+   Mỗi bài toán chỉ cần viết một "view" (xem web/puzzle8/view.js, web/vacuum/view.js).
+
+   Tệp này CHỈ VẼ. Thuật toán nằm ở core/, bài toán (trạng thái đầu, đích, bài mẫu)
+   nằm ở problems/, việc ghi lại từng bước nằm ở tracing/ (đều là Python).
    ============================================================================ */
 
 let W = 1400, H = 900;
@@ -81,14 +84,16 @@ function drawCached(key, w, h, fn, cx, cy, sc = 1, al = 1) {
   return { x: cx - dw / 2, y: cy - dh / 2, w: dw, h: dh };
 }
 
-/* ---------------- Cầu nối Python ---------------- */
+/* ---------------- Cầu nối Python ----------------
+   base: đường dẫn tới thư mục gốc của dự án (nơi có core/, problems/, tracing/).
+   Danh sách tệp Python cần nạp nằm ở web/manifest.json. */
 const PY = {};
 async function loadPython(base, setStatus) {
   if (typeof loadPyodide !== "function") throw new Error("không tải được Pyodide từ mạng (kiểm tra kết nối internet)");
   setStatus("Đang tải Python (Pyodide)…");
   const py = await loadPyodide();
   setStatus("Đang nạp mã Python…");
-  const files = await (await fetch(base + "manifest.json")).json();
+  const files = await (await fetch(base + "web/manifest.json")).json();
   py.FS.mkdirTree("/py");
   for (const f of files) {
     const dir = f.includes("/") ? f.slice(0, f.lastIndexOf("/")) : "";
@@ -96,12 +101,13 @@ async function loadPython(base, setStatus) {
     py.FS.writeFile("/py/" + f, await (await fetch(base + f)).text());
   }
   py.runPython("import sys\nsys.path.insert(0, '/py')");
-  const api = py.pyimport("api");
+  const api = py.pyimport("tracing.api");
   PY.algos = () => JSON.parse(api.algos_json(""));
+  PY.problem = pid => JSON.parse(api.problem_json(JSON.stringify(pid)));
   PY.record = (pid, algo, init, goal) => JSON.parse(api.record_json(JSON.stringify([pid, algo, init, goal])));
   PY.quick = (pid, algo, init, goal) => JSON.parse(api.quick_json(JSON.stringify([pid, algo, init, goal])));
   PY.solvable = (pid, init, goal) => JSON.parse(api.solvable_json(JSON.stringify([pid, init, goal])));
-  PY.random = (pid, algo, goal) => JSON.parse(api.random_json(JSON.stringify([pid, algo, goal])));
+  PY.random = (pid, algo, goal = null) => JSON.parse(api.random_json(JSON.stringify([pid, algo, goal])));
 }
 
 class Rec {
@@ -142,11 +148,12 @@ const E = {
     try {
       await loadPython(view.pythonBase, t => { st.textContent = t; });
       this.algos = PY.algos(); this.keys = Object.keys(this.algos);
+      view.problem = PY.problem(view.id);
       this.algo = this.keys[0]; this.acc = this.algos[this.algo].color.slice();
       this.layoutSwitch(); this.swX = this.swRects[this.algo].x;
       this.barY = view.layout.code.y + 36;
-      const p = view.presets(this.algo)[view.defaultPreset || 0];
-      this.preset = view.defaultPreset || 0;
+      const p = view.presets(this.algo)[view.problem.defaultPreset || 0];
+      this.preset = view.problem.defaultPreset || 0;
       this.load(p[1], p[2]);
       st.style.display = "none";
       let last = performance.now();
@@ -165,6 +172,7 @@ const E = {
   },
 
   get presets() { return this.view.presets(this.algo); },
+  get isStack() { return this.algos[this.algo].frontier === "stack"; },
   get ev() { return this.events[this.evI]; },
   speed() { return SPEEDS[this.speedI]; },
   seek(i) { this.evI = Math.max(0, Math.min(this.events.length - 1, i)); this.evT = 0; this.one = false; },
@@ -199,7 +207,7 @@ const E = {
     else if (key === "next") { this.playing = false; if (this.evI < last) { this.evI++; this.evT = 0; this.one = true; } }
     else if (key === "back") { this.playing = false; this.seek(this.evI - 1); }
     else if (key === "node") {
-      let j = this.evI + 1; while (j < last && this.events[j].line !== 8) j++;
+      let j = this.evI + 1; while (j < last && this.events[j].line !== this.algos[this.algo].takeLine) j++;
       this.evI = Math.min(j, last); this.evT = 0; this.one = true;
     }
     else if (key === "reset") { this.playing = false; this.seek(0); }
@@ -291,7 +299,7 @@ const E = {
   updateQueue(dt) {
     const L = this.view.layout, ev = this.ev, fr = ev.frontier, an = this.view.anchors(this), cb = an.child, nb = an.node;
     for (const e of [...this.animQ.keys()]) if (e >= ev.tn) this.animQ.delete(e);
-    const offset = this.algo === "dfs" ? Math.max(0, fr.length - L.qmax) : 0;
+    const offset = this.isStack ? Math.max(0, fr.length - L.qmax) : 0;
     const inF = new Set(fr);
     fr.forEach((e, i) => {
       let a = this.animQ.get(e);
@@ -453,7 +461,7 @@ const E = {
     });
     const vb = ev.verdict;
     if (vb) {
-      const msg = { ok: "Nút mới → xét tiếp", dup: "Trùng → BỎ", goal: "ĐÍCH!", queued: this.algo === "dfs" ? "Vào ngăn xếp" : "Vào hàng đợi" }[vb];
+      const msg = { ok: "Nút mới → xét tiếp", dup: "Trùng → BỎ", goal: "ĐÍCH!", queued: this.isStack ? "Vào ngăn xếp" : "Vào hàng đợi" }[vb];
       const col = { ok: COL.green, dup: COL.red, goal: COL.gold, queued: COL.green }[vb];
       const e = 1 - Math.pow(1 - Math.min(1, this.bannerAge / 0.3), 3), w = bw * (0.6 + 0.4 * e), cx = r.x + r.w / 2, yy = y + bdy;
       fillRR(cx - w / 2, yy, w, bh, bh / 2, css(shade(col, 0.28))); strokeRR(cx - w / 2, yy, w, bh, bh / 2, css(col), 2);
@@ -462,7 +470,7 @@ const E = {
   },
 
   drawQueue(ev, p) {
-    const L = this.view.layout, qy = L.qy, acc = this.acc, dfs = this.algo === "dfs", QX = L.qx, QP = L.qp, QMAX = L.qmax, cw = L.qcard.w, ch = L.qcard.h;
+    const L = this.view.layout, qy = L.qy, acc = this.acc, dfs = this.isStack, QX = L.qx, QP = L.qp, QMAX = L.qmax, cw = L.qcard.w, ch = L.qcard.h;
     const rect = { x: 12, y: qy, w: W - 24, h: 100 };
     panel(rect); strokeRR(rect.x, rect.y, rect.w, rect.h, 14, css(shade(acc, 0.6)), 2);
     T("FRONTIER", 26, qy + 18, { s: 15, b: 1, c: acc }); T(dfs ? "ngăn xếp LIFO" : "hàng đợi FIFO", 26, qy + 40, { s: 13, c: COL.muted });

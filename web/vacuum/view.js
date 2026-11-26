@@ -1,22 +1,18 @@
 "use strict";
 
-/* View của bài robot hút bụi nhiều phòng: ngôi nhà isometric vẽ trên canvas, robot trụ,
-   thẻ trạng thái [vị trí robot, các phòng], hộp thoại tự đặt.
-   Bài toán và thuật toán chạy bằng Python (python/problems/vacuum.py). */
+/* View của bài robot hút bụi nhiều phòng: CHỈ VẼ ngôi nhà isometric, robot trụ,
+   thẻ trạng thái [phòng robot đứng, các phòng], hộp thoại tự đặt.
+   Trạng thái đầu, đích, bài mẫu và luật chơi khai báo ở problems/vacuum.py (Python),
+   tệp này đọc chúng qua View.problem (nạp lúc khởi động trong engine.js). */
 
 const DIRTY = [150, 108, 66], CLEAN = [80, 184, 116];
 const ROOM_TYPES = ["living", "kitchen", "bedroom", "bath", "study", "hall"];
 const letter = i => String.fromCharCode(65 + i);
-const makeState = (pos, dirt) => [pos, ...dirt.map(d => (d ? "D" : "C"))];
-const makeGoal = (n, pos) => [pos, ...Array(n).fill("C")];
+const roomIndex = state => state[0].charCodeAt(0) - 65;   // "A" -> 0, "B" -> 1, ... (để vẽ)
+const makeState = (pos, dirt) => [letter(pos), ...dirt.map(d => (d ? "D" : "C"))];
+const makeGoal = (n, pos) => [letter(pos), ...Array(n).fill("C")];
 const SCENE = { x: 524, y: 92, w: 864, h: 340 };
 const INFO = { x: 1100, y: 100, w: 280, h: 324 };
-const PRESETS = [
-  ["2 phòng", makeState(0, [1, 1]), makeGoal(2, 1)],
-  ["3 phòng", makeState(0, [1, 1, 1]), makeGoal(3, 2)],
-  ["4 phòng", makeState(1, [1, 0, 1, 1]), makeGoal(4, 3)],
-  ["6 phòng", makeState(2, [1, 1, 0, 1, 1, 1]), makeGoal(6, 5)],
-];
 const MOD = { x: 320, y: 210, w: 760, h: 520 };
 
 /* ---------------- Phép chiếu isometric và các khối vẽ ---------------- */
@@ -244,7 +240,7 @@ class BigCard {
     if (!state) return;
     const n = state.length - 1;
     if (n !== this.n) { this.n = n; this.rx = null; this.dirt = state.slice(1).map(v => v === "D" ? 1 : 0); }
-    const [sq, x0] = this.layout(n), tx = x0 + state[0] * (sq + 6) + sq / 2;
+    const [sq, x0] = this.layout(n), tx = x0 + roomIndex(state) * (sq + 6) + sq / 2;
     this.rx = this.rx === null ? tx : sm(this.rx, tx, 12, dt);
     for (let i = 0; i < n; i++) this.dirt[i] = sm(this.dirt[i], state[1 + i] === "D" ? 1 : 0, 12, dt);
     this.alpha = sm(this.alpha, on ? 1 : 0.22, 9, dt);
@@ -278,15 +274,15 @@ function drawMiniState(g, pw, ph, state) {
     if (dirty) { g.fillStyle = "rgb(60,44,30)"; for (const [dx, dy] of [[0.3, 0.35], [0.65, 0.5], [0.42, 0.75]]) { g.beginPath(); g.arc(x + sw * dx, top + sh * dy, Math.max(1, sh * 0.09), 0, 7); g.fill(); } }
     else { g.beginPath(); g.moveTo(x + sw * 0.28, top + sh * 0.5); g.lineTo(x + sw * 0.45, top + sh * 0.72); g.lineTo(x + sw * 0.74, top + sh * 0.28); g.strokeStyle = "rgb(230,255,236)"; g.lineWidth = Math.max(1, ph / 20); g.stroke(); }
   }
-  const cx = pad + state[0] * (sw + gap) + sw / 2, cy = top + sh / 2, r = Math.min(sw, sh) * 0.38;
+  const cx = pad + roomIndex(state) * (sw + gap) + sw / 2, cy = top + sh / 2, r = Math.min(sw, sh) * 0.38;
   g.beginPath(); g.arc(cx, cy, r, 0, 7); g.fillStyle = "rgb(18,18,22)"; g.fill(); g.strokeStyle = "rgb(96,96,108)"; g.lineWidth = Math.max(1, ph / 24); g.stroke();
   g.beginPath(); g.arc(cx, cy, Math.max(1, r * 0.32), 0, 7); g.fillStyle = css(COL.orange); g.fill();
   g.fillStyle = "rgb(190,200,222)"; g.textAlign = "center"; g.textBaseline = "bottom"; g.font = `bold ${Math.max(8, ph * 0.25)}px ${MONO}`;
-  g.fillText(letter(state[0]) + " " + state.slice(1).join(""), pw / 2, ph - Math.max(1, ph / 14));
+  g.fillText(state[0] + " " + state.slice(1).join(""), pw / 2, ph - Math.max(1, ph / 14));
 }
 
 const View = {
-  id: "vacuum", pythonBase: "../python/", defaultPreset: 0,
+  id: "vacuum", pythonBase: "../../", problem: null,
   layout: {
     W: 1400, H: 940, lh: 21,
     code: { x: 12, y: 92, w: 500, h: 580 }, tab: { x: 524, y: 444, w: 864, h: 228 },
@@ -299,17 +295,14 @@ const View = {
   childCard: new BigCard({ x: INFO.x + 12, y: INFO.y + 130, w: INFO.w - 24, h: 64 }),
   replay: null, n: 2, lastChild: null,
 
-  presets() { return PRESETS; },
-  randomPuzzle(E) {
-    const n = 2 + Math.floor(Math.random() * 5), goal = makeGoal(n, Math.floor(Math.random() * n));
-    return [PY.random("vacuum", E.algo, goal), goal];
-  },
+  presets() { return this.problem.presets; },
+  randomPuzzle(E) { return PY.random("vacuum", E.algo); },
   subtitle() { return `Robot hút bụi · ${this.n} phòng`; },
   anchors() { const a = this.childCard.rect, b = this.nodeCard.rect; return { child: [a.x + a.w / 2, a.y + a.h / 2], node: [b.x + b.w / 2, b.y + b.h / 2] }; },
   drawCard(state, cx, cy, w, h, sc, al) { return drawCached("vc:" + sk(state), w, h, (g, pw, ph) => drawMiniState(g, pw, ph, state), cx, cy, sc, al); },
   drawGoal(xr, E) {
     T("Đích", xr, 30, { s: 14, b: 1, c: COL.green, a: "right", v: "middle" });
-    T(`robot ở ${letter(E.goal[0])}, sạch hết`, xr, 50, { s: 13, c: COL.text, a: "right", v: "middle" });
+    T(`robot ở ${E.goal[0]}, sạch hết`, xr, 50, { s: 13, c: COL.text, a: "right", v: "middle" });
   },
   extraButtons() { return [{ w: 140, label: this.replay ? "Dừng robot" : "Chạy lời giải", key: "replay", active: !!this.replay }]; },
   keys: { v: "replay" },
@@ -325,7 +318,7 @@ const View = {
     L.ecard = { w: cw - 6, h: 46 }; L.estep = cw; L.emax = Math.max(4, Math.floor((W - 24 - L.qx - 40) / cw));
     this.nodeCard.n = this.childCard.n = 0; this.nodeCard.rx = this.childCard.rx = null;
     this.lastChild = null;
-    this.sPos = E.rec.init[0]; this.sDirt = E.rec.init.slice(1).map(v => v === "D" ? 1 : 0); this.sTheta = 0; this.spin = 0;
+    this.sPos = roomIndex(E.rec.init); this.sDirt = E.rec.init.slice(1).map(v => v === "D" ? 1 : 0); this.sTheta = 0; this.spin = 0;
     this.sucking = false; this.particles = [];
   },
 
@@ -352,7 +345,7 @@ const View = {
   },
 
   updateScene(state, dt) {
-    const sc = this.scene, target = state[0], old = this.sPos;
+    const sc = this.scene, target = roomIndex(state), old = this.sPos;
     this.sPos = sm(this.sPos, target, 5, dt);
     const a = sc.posAt(old), b = sc.posAt(this.sPos), dr = b[0] - a[0], dc = b[1] - a[1];
     if (Math.hypot(dr, dc) > 0.004) {
@@ -414,7 +407,7 @@ const View = {
     }
     const ch = ev.child;
     if (ch && !this.replay) {
-      const ai = ev.nodeState[0], bi = ch.state[0];
+      const ai = roomIndex(ev.nodeState), bi = roomIndex(ch.state);
       if (ai !== bi) {
         const a = sc.center(ai), b = sc.center(bi);
         for (let k = 0; k < 9; k++) {
@@ -458,7 +451,7 @@ const View = {
   /* ---------- hộp thoại tự đặt phòng / bụi / robot / đích ---------- */
   editor: {
     active: false, ed: null,
-    open(E) { this.active = true; E.playing = false; View.replay = null; const n = E.rec.init.length - 1; this.ed = { n, pos: E.rec.init[0], dirt: E.rec.init.slice(1).map(v => v === "D"), gpos: E.goal[0] }; },
+    open(E) { this.active = true; E.playing = false; View.replay = null; const n = E.rec.init.length - 1; this.ed = { n, pos: roomIndex(E.rec.init), dirt: E.rec.init.slice(1).map(v => v === "D"), gpos: roomIndex(E.goal) }; },
     col(i) { const n = this.ed.n, w = (MOD.w - 80) / n; return [MOD.x + 40 + i * w, w]; },
     buttons() {
       return [

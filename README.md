@@ -3,50 +3,108 @@
 Trực quan hóa thuật toán tìm kiếm (BFS, DFS) trên hai bài toán: **8-puzzle** và **robot hút bụi nhiều phòng**.
 Mỗi dòng code đang chạy sáng lên và hiện đúng thứ nó làm trên hình (frontier, explored, bảng node).
 
-Thuật toán và bài toán viết bằng **Python**, chạy ngay trong trình duyệt nhờ [Pyodide](https://pyodide.org).
-Giao diện vẽ bằng canvas JavaScript nên chữ và nét sắc ở mọi màn hình.
+Phát triển từ bài trên lớp [`notebooks/vacuum_DFS.ipynb`](notebooks/vacuum_DFS.ipynb): thuật toán viết theo đúng
+cách làm trên lớp (`Node`, `child_node`, `solution`, `Stack`/`push`/`pop`, `Problem`, `DFS(problem)`),
+giao diện chạy **chính hàm đó** và ghi lại từng dòng, không có bản viết lại riêng cho giao diện.
 
-## Cấu trúc
+## Cấu trúc: 4 tầng, mỗi tầng một việc
 
 ```
-index.html            trang chủ: chọn bài toán
-python/               phần Python chạy trong trình duyệt
-  framework.py        Problem, Rec (bộ ghi sự kiện)
-  algorithms/         mỗi thuật toán một tệp (bfs.py, dfs.py) + graph_search.py dùng chung
-  problems/           mỗi bài toán một tệp (puzzle8.py, vacuum.py)
-  api.py              cổng giao tiếp JS <-> Python (JSON)
-  manifest.json       danh sách tệp Python cần nạp
-shared/engine.js      giao diện dùng chung: code sáng dòng, bảng node, frontier, explored, điều khiển
-puzzle8/              trang + view.js (phần vẽ riêng của 8-puzzle)
-vacuum/               trang + view.js (ngôi nhà isometric của robot hút bụi)
-desktop/              bản pygame chạy trên máy (dùng để nộp bài)
+core/                    ① THUẬT TOÁN (giống trên lớp, không có giao diện)
+  node.py                Node, child_node, solution
+  problem.py             Problem, is_goal
+  data_structures.py     Stack / push / pop (DFS), Queue / enqueue / dequeue (BFS), is_empty
+  algorithms/
+    dfs.py               def DFS(problem)
+    bfs.py               def BFS(problem)
+    __init__.py          ALGORITHMS = danh sách thuật toán
+
+problems/                ② BÀI TOÁN
+  puzzle8.py             trạng thái đầu / đích / bài mẫu, actions_puzzle8, result_puzzle8
+  vacuum.py              trạng thái đầu / đích / bài mẫu, actions_vacuum, result_vacuum, chi_so_phong
+  __init__.py            PROBLEMS = danh sách bài toán
+
+tracing/                 ③ CẦU NỐI thuật toán ↔ giao diện (không chứa thuật toán)
+  tracer.py              chạy hàm DFS/BFS thật, ghi lại từng dòng code + frontier / explored
+  narration.py           lời thuyết minh tiếng Việt cho từng dòng code
+  algorithm_info.py      tên, màu, giới hạn số nút của từng thuật toán
+  stats.py               đếm nhanh số bước / số nút, tạo bài ngẫu nhiên
+  api.py                 cổng JSON cho giao diện web
+
+web/                     ④ GIAO DIỆN WEB (chỉ vẽ)
+  shared/engine.js       khung chung: code sáng dòng, bảng node, frontier, explored, nút điều khiển
+  puzzle8/               trang + view.js (vẽ bàn cờ 3x3)
+  vacuum/                trang + view.js (vẽ ngôi nhà isometric)
+  manifest.json          danh sách tệp Python trình duyệt cần nạp
+desktop/                 ④ GIAO DIỆN PYGAME (chỉ vẽ, dùng lại core/ problems/ tracing/)
+
+index.html               trang chủ (GitHub Pages cần tệp này ở thư mục gốc)
+run_console.py           chạy thuật toán trong cửa sổ dòng lệnh, không giao diện (giống notebook)
+notebooks/               bài gốc trên lớp để đối chiếu
 ```
 
-## Chạy thử trên máy
+Quy tắc: tầng sau chỉ được dùng tầng trước. `core/` không biết gì về giao diện; `web/` và `desktop/` không chứa thuật toán.
 
-Trang cần chạy qua máy chủ (không mở trực tiếp tệp):
+## Tra nhanh: chức năng nào nằm ở đâu
+
+| Cần tìm | Mở tệp | Tìm tên |
+|---|---|---|
+| Hàm DFS / BFS | `core/algorithms/dfs.py`, `bfs.py` | `def DFS`, `def BFS` |
+| Lớp Node, sinh nút con, lần ngược lời giải | `core/node.py` | `Node`, `child_node`, `solution` |
+| Ngăn xếp / hàng đợi | `core/data_structures.py` | `Stack`, `push`, `pop`, `Queue`, `enqueue`, `dequeue` |
+| Lớp Problem, kiểm tra đích | `core/problem.py` | `Problem`, `is_goal` |
+| **Trạng thái đầu / đích của 8-puzzle** | `problems/puzzle8.py` | `INITIAL_STATE`, `GOAL_STATE` |
+| Các bài mẫu 8-puzzle (nút "Bài mẫu") | `problems/puzzle8.py` | `PRESETS` |
+| Hành động / kết quả hành động 8-puzzle | `problems/puzzle8.py` | `actions_puzzle8`, `result_puzzle8` |
+| Kiểm tra 8-puzzle giải được không | `problems/puzzle8.py` | `solvable` |
+| **Trạng thái đầu / đích robot hút bụi** | `problems/vacuum.py` | `INITIAL_STATE`, `GOAL_STATE` |
+| Hành động / kết quả robot hút bụi | `problems/vacuum.py` | `actions_vacuum`, `result_vacuum`, `chi_so_phong` |
+| Tạo `Problem(...)` cho từng bài | `problems/<bài>.py` | `make_problem` |
+| Lời giải thích hiện dưới khung code | `tracing/narration.py` | `caption` |
+| Tên, màu, giới hạn số nút của thuật toán | `tracing/algorithm_info.py` | `ALGORITHM_INFO` |
+| Cách giao diện biết dòng nào đang chạy | `tracing/tracer.py` | `Recording` |
+| Vẽ bàn cờ 8-puzzle | `web/puzzle8/view.js`, `desktop/8puzzle_pygame.py` | `BigBoard`, `drawMiniBoard` |
+| Vẽ ngôi nhà, robot | `web/vacuum/view.js`, `desktop/vacuum_pygame.py` | `Scene`, `drawRobot` |
+
+## Chạy thử
+
+Không cần giao diện (giống notebook):
+
+```
+python run_console.py                # DFS, robot hút bụi
+python run_console.py bfs puzzle8    # BFS, 8-puzzle
+```
+
+Bản web: chạy máy chủ ở thư mục gốc (không mở trực tiếp tệp), rồi mở <http://localhost:8000>:
 
 ```
 python -m http.server 8000
 ```
 
-Rồi mở <http://localhost:8000>.
+Bản pygame (cần `pip install pygame`):
 
-## Thêm thuật toán mới
+```
+python desktop/8puzzle_pygame.py
+python desktop/vacuum_pygame.py
+```
 
-1. Tạo `python/algorithms/<ten>.py` có `NAME`, `FULL`, `L1`, `L2`, `COLOR`, `LIMIT`, `CODE` (các dòng code hiển thị),
-   `run(rec)` (ghi sự kiện bằng `rec.emit(...)`) và `quick(problem, init, goal, limit)`.
-2. Thêm vào `REGISTRY` trong `python/algorithms/__init__.py` và vào `python/manifest.json`.
+## Thêm thuật toán mới (vd. UCS, IDS)
 
-Công tắc thuật toán trên giao diện tự có thêm thẻ mới, áp dụng cho mọi bài toán.
+1. Tạo `core/algorithms/<ten>.py` có hàm `<TEN>(problem)` viết cùng kiểu với `dfs.py`, thêm vào `ALGORITHMS`
+   trong `core/algorithms/__init__.py` và vào `web/manifest.json`.
+2. Thêm thông tin hiển thị vào `ALGORITHM_INFO` trong `tracing/algorithm_info.py`.
+3. Nếu thuật toán có dòng code kiểu mới, thêm mẫu nhận dạng vào `ROLES` và câu thuyết minh vào `caption()` trong `tracing/narration.py`.
+
+Giao diện web tự có thêm thẻ chọn thuật toán, áp dụng cho mọi bài toán; đoạn code hiển thị lấy thẳng từ tệp Python.
 
 ## Thêm bài toán mới
 
-1. Tạo `python/problems/<ten>.py` (lớp kế thừa `Problem`, cùng `make`, `solvable`, `scramble`),
-   thêm vào `REGISTRY` trong `python/problems/__init__.py` và vào `manifest.json`.
-2. Tạo thư mục `<ten>/` gồm `index.html` và `view.js` (xem `puzzle8/view.js` làm mẫu), rồi thêm một thẻ ở `index.html` gốc.
+1. Tạo `problems/<ten>.py` theo bố cục của `vacuum.py` (`INITIAL_STATE`, `GOAL_STATE`, `PRESETS`, `DEFAULT_PRESET`,
+   `actions_<ten>`, `result_<ten>`, `make_problem`, `solvable`, `random_goal`, `scramble`, `describe_action`),
+   thêm vào `PROBLEMS` trong `problems/__init__.py` và vào `web/manifest.json`.
+2. Tạo `web/<ten>/` gồm `index.html` và `view.js` (xem `web/puzzle8/view.js` làm mẫu), rồi thêm một thẻ ở `index.html` gốc.
 
 ## Đưa lên GitHub Pages
 
 Settings → Pages → Deploy from a branch → `main`, thư mục `/ (root)`.
-Các link: `/` (trang chủ), `/puzzle8/`, `/vacuum/`. Mọi đường dẫn đều là đường dẫn tương đối.
+Các link: `/` (trang chủ), `/web/puzzle8/`, `/web/vacuum/`. Mọi đường dẫn đều là đường dẫn tương đối.

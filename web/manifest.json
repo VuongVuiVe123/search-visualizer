@@ -1,0 +1,18 @@
+[
+  "core/__init__.py",
+  "core/node.py",
+  "core/problem.py",
+  "core/data_structures.py",
+  "core/algorithms/__init__.py",
+  "core/algorithms/bfs.py",
+  "core/algorithms/dfs.py",
+  "problems/__init__.py",
+  "problems/puzzle8.py",
+  "problems/vacuum.py",
+  "tracing/__init__.py",
+  "tracing/algorithm_info.py",
+  "tracing/narration.py",
+  "tracing/tracer.py",
+  "tracing/stats.py",
+  "tracing/api.py"
+]
