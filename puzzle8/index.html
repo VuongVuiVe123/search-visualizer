@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>8-puzzle · BFS / DFS</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #080a10; overflow: hidden; }
+  canvas { display: block; touch-action: manipulation; }
+  #status { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+            color: #86e0ee; font: 20px "Segoe UI", system-ui, sans-serif; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="status">Đang tải…</div>
+<script src="https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js"></script>
+<script src="../shared/engine.js"></script>
+<script src="view.js"></script>
+</body>
+</html>
