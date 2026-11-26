@@ -1,7 +1,8 @@
 import ctypes
 import math
-import random
+import os
 import re
+import sys
 
 try:
     ctypes.windll.shcore.SetProcessDpiAwareness(2)
@@ -14,10 +15,6 @@ except Exception:
 import pygame
 
 W, H = 1400, 900
-GOAL = (1, 2, 3, 4, 5, 6, 7, 8, 0)
-PRESETS = [("2 bước", (1, 2, 3, 4, 0, 6, 7, 5, 8)),
-           ("4 bước", (1, 5, 2, 4, 0, 3, 7, 8, 6)),
-           ("6 bước", (0, 2, 3, 1, 8, 5, 4, 7, 6))]
 
 BG = (13, 17, 27)
 PANEL = (20, 26, 40)
@@ -33,243 +30,42 @@ GOLD = (255, 214, 90)
 TILE_COL = {1: (239, 122, 122), 2: (240, 170, 110), 3: (240, 214, 110), 4: (150, 215, 120),
             5: (100, 210, 190), 6: (100, 170, 240), 7: (150, 130, 240), 8: (210, 130, 220)}
 
-CODE = [
-    "def BFS(problem):",
-    "    node = Node(problem.initial_state)",
-    "    if is_goal(problem, node.state):",
-    "        return solution(node)",
-    "    frontier = Queue()",
-    "    enqueue(frontier, node)",
-    "    explored = []",
-    "    while not is_empty(frontier):",
-    "        node = dequeue(frontier)",
-    "        explored.append(node.state)",
-    "        for action in problem.actions(node.state):",
-    "            child = child_node(problem, node, action)",
-    "            in_frontier = False",
-    "            for n in frontier:",
-    "                if n.state == child.state:",
-    "                    in_frontier = True",
-    "            if child.state not in explored and not in_frontier:",
-    "                if is_goal(problem, child.state):",
-    "                    return solution(child)",
-    "                enqueue(frontier, child)",
-    "    return None",
-]
-CODE_DFS = [l.replace("BFS", "DFS").replace("Queue()", "Stack()").replace("enqueue", "push")
-            .replace("dequeue", "pop").replace("for action in problem.actions(node.state):",
-                                               "for action in reversed(problem.actions(node.state)):")
-            for l in CODE]
-ALGO_COL = {"bfs": (86, 214, 230), "dfs": (255, 126, 170)}
-ALGO_INFO = {"bfs": ("BFS", "Chiều rộng", "hàng đợi FIFO", "Breadth-First Search"),
-             "dfs": ("DFS", "Chiều sâu", "ngăn xếp LIFO", "Depth-First Search")}
 ACC_NOW = (86, 214, 230)
-CODE_BY = {"bfs": CODE, "dfs": CODE_DFS}
-PRESETS_DFS = [("34 bước", (4, 1, 3, 2, 5, 6, 0, 7, 8)),
-               ("Notebook", (1, 2, 3, 4, 0, 6, 7, 5, 8)),
-               ("292 bước", (2, 3, 0, 1, 4, 6, 7, 5, 8))]
-LIMIT = {"bfs": 450, "dfs": 600}
 TOKEN = re.compile(r"(?P<kw>\b(?:def|if|for|while|not|in|return|and)\b)|(?P<fn>\b[A-Za-z_]\w*(?=\())|"
                    r"(?P<lit>\b(?:False|True|None)\b)")
 
 
-def actions(s):
-    r, c = divmod(s.index(0), 3)
-    out = []
-    if r > 0: out.append("Lên")
-    if r < 2: out.append("Xuống")
-    if c > 0: out.append("Trái")
-    if c < 2: out.append("Phải")
-    return out
+# =====================================================================
+# Lấy thuật toán, bài toán và bộ ghi từ các thư mục chung của dự án.
+# Tệp này CHỈ VẼ, không tự viết lại thuật toán:
+#   core/algorithms/   BFS, DFS (giống trên lớp)
+#   problems/puzzle8.py  trạng thái đầu, đích, bài mẫu, actions, result
+#   tracing/           ghi lại từng dòng code đang chạy để vẽ
+# =====================================================================
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from problems import puzzle8  # noqa: E402
+from tracing.algorithm_info import ALGORITHM_INFO  # noqa: E402
+from tracing.stats import quick, random_initial  # noqa: E402
+from tracing.tracer import Recording, algorithm_code, take_line  # noqa: E402
+
+GOAL = puzzle8.GOAL_STATE
+PRESETS = puzzle8.PRESETS["bfs"]
+PRESETS_DFS = puzzle8.PRESETS["dfs"]
+CODE_BY = {k: algorithm_code(k)[0] for k in ALGORITHM_INFO}
+ALGO_COL = {k: v["color"] for k, v in ALGORITHM_INFO.items()}
+ALGO_INFO = {k: (v["name"], v["l1"], v["l2"], v["full"]) for k, v in ALGORITHM_INFO.items()}
+LIMIT = {k: v["limit"] for k, v in ALGORITHM_INFO.items()}
+solvable = puzzle8.solvable
 
 
-def result(s, a):
-    i = s.index(0)
-    r, c = divmod(i, 3)
-    dr, dc = {"Lên": (-1, 0), "Xuống": (1, 0), "Trái": (0, -1), "Phải": (0, 1)}[a]
-    j = (r + dr) * 3 + (c + dc)
-    l = list(s)
-    l[i], l[j] = l[j], l[i]
-    return tuple(l)
+def quick_stats(init, goal, algo="bfs"):
+    """(số bước, số nút đã mở) hoặc None nếu bài quá lớn để trình chiếu."""
+    return quick(algo, puzzle8.make_problem(init, goal))
 
 
-def inversions(state):
-    t = [v for v in state if v]
-    return sum(1 for i in range(len(t)) for j in range(i + 1, len(t)) if t[i] > t[j])
-
-
-def solvable(init, goal):
-    return inversions(init) % 2 == inversions(goal) % 2
-
-
-def quick_stats(init, goal, algo="bfs", limit=None):
-    limit = limit or LIMIT[algo]
-    if init == goal:
-        return 0, 0
-    if algo == "dfs":
-        fr, parent, ex, frs, opened = [init], {init: None}, set(), {init}, 0
-        while fr:
-            st = fr.pop()
-            frs.discard(st)
-            ex.add(st)
-            opened += 1
-            if opened > limit:
-                return None
-            for a in reversed(actions(st)):
-                c = result(st, a)
-                if c in ex or c in frs:
-                    continue
-                parent[c] = st
-                if c == goal:
-                    n, x = 0, c
-                    while parent[x] is not None:
-                        x, n = parent[x], n + 1
-                    return n, opened
-                fr.append(c)
-                frs.add(c)
-        return None
-    from collections import deque
-    fr, seen, opened = deque([(init, 0)]), {init}, 0
-    while fr:
-        st, d = fr.popleft()
-        opened += 1
-        if opened > limit:
-            return None
-        for a in actions(st):
-            c = result(st, a)
-            if c in seen:
-                continue
-            if c == goal:
-                return d + 1, opened
-            seen.add(c)
-            fr.append((c, d + 1))
-    return None
-
-
-class Rec:
-    def __init__(self, init, goal=GOAL, algo="bfs"):
-        self.init = init
-        self.goal = goal
-        self.algo = algo
-        self.nodes = []
-        self.events = []
-        self.frontier, self.explored = [], []
-        self.reset_view()
-        self.node_state, self.node_eid, self.node_depth = init, None, 0
-        self.tn = 0
-        self.ckey = 0
-        self.path = ()
-        self.work()
-
-    def reset_view(self):
-        self.act = None
-        self.child = None
-        self.child_eid = None
-        self.gate = [None, None]
-        self.verdict = None
-        self.match = None
-        self.scan_match = None
-
-    def emit(self, line, cap, dur, kind="n"):
-        self.events.append(dict(
-            line=line, cap=cap, dur=dur, kind=kind, act=self.act, child=self.child, child_eid=self.child_eid,
-            frontier=tuple(self.frontier), explored=tuple(self.explored), tn=self.tn,
-            gate=tuple(self.gate), verdict=self.verdict, match=self.match, scan_match=self.scan_match,
-            node_state=self.node_state, node_eid=self.node_eid, node_depth=self.node_depth, path=self.path))
-
-    def add_node(self, state, parent, action):
-        depth = 0 if parent is None else self.nodes[parent]["depth"] + 1
-        self.nodes.append(dict(state=state, parent=parent, action=action, depth=depth))
-        self.tn = len(self.nodes)
-        return len(self.nodes) - 1
-
-    def chain(self, eid):
-        out, acts = [], []
-        while eid is not None:
-            out.append(eid)
-            acts.append(self.nodes[eid]["action"])
-            eid = self.nodes[eid]["parent"]
-        return tuple(reversed(out)), [a for a in reversed(acts) if a]
-
-    def work(self):
-        init = self.init
-        dfs = self.algo == "dfs"
-        ds = "ngăn xếp" if dfs else "hàng đợi"
-        self.emit(1, "node = Node(initial_state): tạo nút gốc từ trạng thái đầu.", 0.9)
-        if init == self.goal:
-            self.emit(2, "is_goal(node.state) đúng ngay → trả về lời giải rỗng.", 0.8)
-            self.emit(3, "return solution(node)", 0.8, "done")
-            return
-        self.emit(2, "is_goal(problem, node.state)? Chưa phải đích → tiếp tục.", 0.6)
-        self.emit(4, "frontier = Stack(): tạo ngăn xếp LIFO rỗng." if dfs else "frontier = Queue(): tạo hàng đợi FIFO rỗng.", 0.5)
-        root = self.add_node(init, None, None)
-        self.frontier.append(root)
-        self.node_eid = None
-        self.emit(5, "push(frontier, node): đặt nút gốc lên ĐỈNH ngăn xếp." if dfs else "enqueue(frontier, node): bỏ nút gốc vào CUỐI hàng đợi.", 0.9)
-        self.emit(6, "explored = []: tập các trạng thái đã mở, ban đầu rỗng.", 0.5)
-        while self.frontier:
-            self.reset_view()
-            self.emit(7, f"while not is_empty(frontier): {ds} còn {len(self.frontier)} nút → lặp.", 0.4)
-            eid = self.frontier.pop(-1 if dfs else 0)
-            nd = self.nodes[eid]
-            self.node_state, self.node_eid, self.node_depth = nd["state"], eid, nd["depth"]
-            self.emit(8, "pop(frontier): lấy nút ở ĐỈNH ngăn xếp (vào sau, ra trước)." if dfs else "dequeue(frontier): lấy nút ở ĐẦU hàng đợi (vào trước, ra trước).", 0.9)
-            self.explored.append(eid)
-            self.emit(9, "explored.append(node.state): đánh dấu trạng thái này đã được mở.", 0.7)
-            for a in (list(reversed(actions(nd["state"]))) if dfs else actions(nd["state"])):
-                self.reset_view()
-                self.act = a
-                self.emit(10, f"for action in {'reversed(' if dfs else ''}problem.actions(...){')' if dfs else ''}: thử hành động «{a}».", 0.5)
-                self.ckey += 1
-                cs = result(nd["state"], a)
-                self.child = (cs, eid, self.ckey)
-                self.emit(11, f"child_node(problem, node, «{a}»): trượt ô trống để sinh nút con.", 1.0)
-                self.gate[1] = False
-                self.emit(12, f"in_frontier = False: giả sử nút con chưa có trong {ds}.", 0.35)
-                hit = [f for f in self.frontier if self.nodes[f]["state"] == cs]
-                self.scan_match = hit[0] if hit else None
-                self.emit(13, f"for n in frontier: so sánh nút con với từng nút đang chờ trong {ds}.",
-                          0.5 + min(len(self.frontier), 24) * 0.035, "scan")
-                in_frontier = False
-                if hit:
-                    self.match = hit[0]
-                    self.emit(14, "n.state == child.state: TRÙNG với một nút đang chờ!", 0.6)
-                    in_frontier = True
-                    self.gate[1] = True
-                    self.emit(15, "in_frontier = True", 0.4)
-                in_explored = any(self.nodes[e]["state"] == cs for e in self.explored)
-                self.gate[0] = in_explored
-                ok = (not in_explored) and not in_frontier
-                self.verdict = "ok" if ok else "dup"
-                if ok:
-                    why = f"chưa mở và chưa có trong {ds} → nút MỚI, xét tiếp."
-                elif in_explored:
-                    why = "trạng thái này đã nằm trong explored → BỎ."
-                else:
-                    why = "trạng thái này đang chờ trong frontier → BỎ."
-                self.emit(16, "if child.state not in explored and not in_frontier: " + why, 1.0, "check")
-                if not ok:
-                    continue
-                if cs == self.goal:
-                    gid = self.add_node(cs, eid, a)
-                    self.verdict = "goal"
-                    self.child_eid = gid
-                    self.emit(17, "is_goal(problem, child.state): ĐÚNG, đã tới trạng thái đích!", 0.9)
-                    self.path, acts = self.chain(gid)
-                    if dfs and len(acts) > 12:
-                        lst = " → ".join(acts[:10]) + f" → … ({len(acts)} bước, DFS không đảm bảo ngắn nhất)"
-                    else:
-                        lst = " → ".join(acts)
-                    self.emit(18, f"return solution(child): lời giải {len(acts)} bước: " + lst, 2.0, "done")
-                    return
-                self.emit(17, "is_goal(problem, child.state)? Chưa phải đích.", 0.5)
-                cid = self.add_node(cs, eid, a)
-                self.frontier.append(cid)
-                self.child_eid = cid
-                self.verdict = "queued"
-                self.emit(19, "push(frontier, child): nút con lên ĐỈNH ngăn xếp, đồng thời thêm vào bảng." if dfs else "enqueue(frontier, child): nút con vào CUỐI hàng đợi, đồng thời thêm vào bảng.", 0.95)
-        self.reset_view()
-        self.emit(20, f"return None: {ds} cạn, không có lời giải.", 1.0, "done")
+def Rec(init, goal, algo):
+    """Chạy thuật toán thật và ghi lại từng dòng (xem tracing/tracer.py)."""
+    return Recording(algo, "puzzle8", puzzle8.make_problem(init, goal))
 
 
 def sm(v, t, k, dt):
@@ -624,7 +420,7 @@ class App:
             self.seek(self.ev_i - 1)
         elif key == "node":
             j = self.ev_i + 1
-            while j < last and self.events[j]["line"] != 8:
+            while j < last and self.events[j]["line"] != take_line(self.algo):
                 j += 1
             self.ev_i, self.ev_t, self.one = min(j, last), 0.0, True
         elif key == "reset":
@@ -640,13 +436,7 @@ class App:
             self.preset = int(key[1:])
             self.load(self.presets[self.preset][1])
         elif key == "rand":
-            for _ in range(120):
-                s, prev = self.goal, None
-                for _ in range(random.randint(2, 9)):
-                    opts = [o for o in (result(s, a) for a in actions(s)) if o != prev]
-                    prev, s = s, random.choice(opts)
-                if quick_stats(s, self.goal, self.algo) is not None:
-                    break
+            s, _ = random_initial("puzzle8", self.algo, self.goal)
             self.preset = -1
             self.load(s, self.goal)
         elif key == "edit":
@@ -748,14 +538,7 @@ class App:
             self.ed["sel"] = None
             self.ed_check()
         elif key == "ed_shuffle":
-            goal = tuple(self.ed["goal"])
-            for _ in range(60):
-                st, prev = goal, None
-                for _ in range(random.randint(6, 9)):
-                    opts = [o for o in (result(st, a) for a in actions(st)) if o != prev]
-                    prev, st = st, random.choice(opts)
-                if quick_stats(st, goal, self.algo) is not None:
-                    break
+            st, _ = random_initial("puzzle8", self.algo, self.ed["goal"])
             self.ed["init"] = list(st)
             self.ed["sel"] = None
             self.ed_check()

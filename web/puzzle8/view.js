@@ -1,14 +1,10 @@
 "use strict";
 
-/* View của bài 8-puzzle: bàn cờ 3x3 trượt ô, thẻ trạng thái, hộp thoại tự đặt.
-   Thuật toán và bài toán chạy bằng Python (python/problems/puzzle8.py). */
+/* View của bài 8-puzzle: CHỈ VẼ bàn cờ 3x3 trượt ô, thẻ trạng thái, hộp thoại tự đặt.
+   Trạng thái đầu, đích và các bài mẫu khai báo ở problems/puzzle8.py (Python),
+   tệp này đọc chúng qua View.problem (nạp lúc khởi động trong engine.js). */
 
-const GOAL = [1, 2, 3, 4, 5, 6, 7, 8, 0];
 const TILE = { 1: [239, 122, 122], 2: [240, 170, 110], 3: [240, 214, 110], 4: [150, 215, 120], 5: [100, 210, 190], 6: [100, 170, 240], 7: [150, 130, 240], 8: [210, 130, 220] };
-const PRESETS = {
-  bfs: [["2 bước", [1, 2, 3, 4, 0, 6, 7, 5, 8]], ["4 bước", [1, 5, 2, 4, 0, 3, 7, 8, 6]], ["6 bước", [0, 2, 3, 1, 8, 5, 4, 7, 6]]],
-  dfs: [["34 bước", [4, 1, 3, 2, 5, 6, 0, 7, 8]], ["Notebook", [1, 2, 3, 4, 0, 6, 7, 5, 8]], ["292 bước", [2, 3, 0, 1, 4, 6, 7, 5, 8]]],
-};
 
 class BigBoard {
   constructor(x, y, size = 132) {
@@ -65,7 +61,7 @@ function drawMiniBoard(g, pw, ph, state) {
 const MOD = { x: 350, y: 200, w: 700, h: 500 };
 
 const View = {
-  id: "puzzle8", pythonBase: "../python/", defaultPreset: 1,
+  id: "puzzle8", pythonBase: "../../", problem: null,
   layout: {
     W: 1400, H: 900, lh: 20,
     code: { x: 12, y: 92, w: 528, h: 540 }, tab: { x: 552, y: 92, w: 468, h: 540 },
@@ -78,8 +74,9 @@ const View = {
   childBoard: new BigBoard(1032 + 356 / 2 - 66, 92 + 56 + 132 + 68),
   lastChildKey: null,
 
-  presets(algo) { return (PRESETS[algo] || PRESETS.bfs).map(p => [p[0], p[1], GOAL.slice()]); },
-  randomPuzzle(E) { return [PY.random("puzzle8", E.algo, GOAL), GOAL.slice()]; },
+  get goal() { return this.problem.goal.slice(); },
+  presets(algo) { const ps = this.problem.presets; return ps[algo] || ps[Object.keys(ps)[0]]; },
+  randomPuzzle(E) { return PY.random("puzzle8", E.algo, this.goal); },
   subtitle() { return "8-puzzle · mỗi dòng code chạy, hình tương ứng sáng lên"; },
   anchors() { return { child: [this.childBoard.cx, this.childBoard.cy], node: [this.nodeBoard.cx, this.nodeBoard.cy] }; },
   drawCard(state, cx, cy, w, h, sc, al) { return drawCached("p8:" + sk(state), w, h, (g, pw, ph) => drawMiniBoard(g, pw, ph, state), cx, cy, sc, al); },
@@ -154,8 +151,8 @@ const View = {
       const ed = this.ed;
       if (key === "cancel") this.active = false;
       else if (key === "apply") { if (ed.ok) { this.active = false; E.preset = -1; E.load(ed.init.slice(), ed.goal.slice()); } }
-      else if (key === "std") { ed.goal = GOAL.slice(); ed.sel = null; this.check(E); }
-      else if (key === "shuffle") { ed.init = PY.random("puzzle8", E.algo, ed.goal); ed.sel = null; this.check(E); }
+      else if (key === "std") { ed.goal = View.goal; ed.sel = null; this.check(E); }
+      else if (key === "shuffle") { ed.init = PY.random("puzzle8", E.algo, ed.goal)[0]; ed.sel = null; this.check(E); }
     },
     click(m, E) {
       for (const b of this.buttons()) if (inRect(m, b)) { this.press(b.key, E); return; }

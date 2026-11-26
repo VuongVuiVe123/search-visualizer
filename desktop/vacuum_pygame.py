@@ -1,8 +1,9 @@
 import ctypes
 import math
+import os
 import random
 import re
-from collections import deque
+import sys
 
 try:
     ctypes.windll.shcore.SetProcessDpiAwareness(2)
@@ -29,202 +30,55 @@ GREEN = (104, 224, 150)
 GOLD = (255, 214, 90)
 DIRTY = (150, 108, 66)
 CLEAN = (80, 184, 116)
-ALGO_COL = {"bfs": (86, 214, 230), "dfs": (255, 126, 170)}
-ALGO_INFO = {"bfs": ("BFS", "Chiều rộng", "hàng đợi FIFO", "Breadth-First Search"),
-             "dfs": ("DFS", "Chiều sâu", "ngăn xếp LIFO", "Depth-First Search")}
 ACC_NOW = (86, 214, 230)
 
-CODE = [
-    "def BFS(problem):",
-    "    node = Node(problem.initial_state)",
-    "    if is_goal(problem, node.state):",
-    "        return solution(node)",
-    "    frontier = Queue()",
-    "    enqueue(frontier, node)",
-    "    explored = []",
-    "    while not is_empty(frontier):",
-    "        node = dequeue(frontier)",
-    "        explored.append(node.state)",
-    "        for action in problem.actions(node.state):",
-    "            child = child_node(problem, node, action)",
-    "            in_frontier = False",
-    "            for n in frontier:",
-    "                if n.state == child.state:",
-    "                    in_frontier = True",
-    "            if child.state not in explored and not in_frontier:",
-    "                if is_goal(problem, child.state):",
-    "                    return solution(child)",
-    "                enqueue(frontier, child)",
-    "    return None",
-]
-CODE_DFS = [l.replace("BFS", "DFS").replace("Queue()", "Stack()").replace("enqueue", "push")
-            .replace("dequeue", "pop").replace("for action in problem.actions(node.state):",
-                                               "for action in reversed(problem.actions(node.state)):")
-            for l in CODE]
-CODE_BY = {"bfs": CODE, "dfs": CODE_DFS}
 TOKEN = re.compile(r"(?P<kw>\b(?:def|if|for|while|not|in|return|and)\b)|(?P<fn>\b[A-Za-z_]\w*(?=\())|"
                    r"(?P<lit>\b(?:False|True|None)\b)")
 
 ROOM_TYPES = ["living", "kitchen", "bedroom", "bath", "study", "hall"]
 ROOM_NAMES = {"living": "Phòng khách", "kitchen": "Bếp", "bedroom": "Phòng ngủ", "bath": "Phòng tắm",
               "study": "Làm việc", "hall": "Hành lang", "storage": "Kho"}
-ACT_VI = {"Suck": "hút bụi phòng hiện tại → phòng đó thành C",
-          "Left": "robot sang phòng bên trái",
-          "Right": "robot sang phòng bên phải"}
 
 
 def letter(i):
     return chr(65 + i)
 
 
-def actions(state):
-    return ["Suck", "Left", "Right"]
-
-
-def result(state, a):
-    n = len(state) - 1
-    pos, st = state[0], list(state[1:])
-    if a == "Suck":
-        st[pos] = "C"
-    elif a == "Left":
-        pos = max(0, pos - 1)
-    elif a == "Right":
-        pos = min(n - 1, pos + 1)
-    return (pos,) + tuple(st)
+def room_index(state):
+    """Phòng robot đang đứng, đổi từ chữ sang số để vẽ: 'A' -> 0, 'B' -> 1, ..."""
+    return ord(state[0]) - ord("A")
 
 
 def make_state(pos, dirt):
-    return (pos,) + tuple("D" if d else "C" for d in dirt)
+    return (letter(pos),) + tuple("D" if d else "C" for d in dirt)
 
 
 def make_goal(n, pos):
-    return (pos,) + ("C",) * n
+    return (letter(pos),) + ("C",) * n
 
 
-class Rec:
-    def __init__(self, init, goal, algo):
-        self.init, self.goal, self.algo = init, goal, algo
-        self.nodes = []
-        self.events = []
-        self.frontier, self.explored = [], []
-        self.reset_view()
-        self.node_state, self.node_eid, self.node_depth = init, None, 0
-        self.tn = 0
-        self.ckey = 0
-        self.path = ()
-        self.solution = []
-        self.work()
+# =====================================================================
+# Lấy thuật toán, bài toán và bộ ghi từ các thư mục chung của dự án.
+# Tệp này CHỈ VẼ, không tự viết lại thuật toán:
+#   core/algorithms/    BFS, DFS (giống trên lớp)
+#   problems/vacuum.py  trạng thái đầu, đích, bài mẫu, actions_vacuum, result_vacuum
+#   tracing/            ghi lại từng dòng code đang chạy để vẽ
+# =====================================================================
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from problems import vacuum  # noqa: E402
+from tracing.algorithm_info import ALGORITHM_INFO  # noqa: E402
+from tracing.stats import random_initial  # noqa: E402
+from tracing.tracer import Recording, algorithm_code, take_line  # noqa: E402
 
-    def reset_view(self):
-        self.act = None
-        self.child = None
-        self.child_eid = None
-        self.gate = [None, None]
-        self.verdict = None
-        self.match = None
-        self.scan_match = None
+PRESETS = vacuum.PRESETS        # (nhãn, trạng thái đầu, trạng thái đích)
+CODE_BY = {k: algorithm_code(k)[0] for k in ALGORITHM_INFO}
+ALGO_COL = {k: v["color"] for k, v in ALGORITHM_INFO.items()}
+ALGO_INFO = {k: (v["name"], v["l1"], v["l2"], v["full"]) for k, v in ALGORITHM_INFO.items()}
 
-    def emit(self, line, cap, dur, kind="n"):
-        self.events.append(dict(
-            line=line, cap=cap, dur=dur, kind=kind, act=self.act, child=self.child, child_eid=self.child_eid,
-            frontier=tuple(self.frontier), explored=tuple(self.explored), tn=self.tn,
-            gate=tuple(self.gate), verdict=self.verdict, match=self.match, scan_match=self.scan_match,
-            node_state=self.node_state, node_eid=self.node_eid, node_depth=self.node_depth, path=self.path))
 
-    def add_node(self, state, parent, action):
-        depth = 0 if parent is None else self.nodes[parent]["depth"] + 1
-        self.nodes.append(dict(state=state, parent=parent, action=action, depth=depth))
-        self.tn = len(self.nodes)
-        return len(self.nodes) - 1
-
-    def chain(self, eid):
-        out, acts = [], []
-        while eid is not None:
-            out.append(eid)
-            acts.append(self.nodes[eid]["action"])
-            eid = self.nodes[eid]["parent"]
-        return tuple(reversed(out)), [a for a in reversed(acts) if a]
-
-    def work(self):
-        init = self.init
-        dfs = self.algo == "dfs"
-        ds = "ngăn xếp" if dfs else "hàng đợi"
-        self.emit(1, "node = Node(initial_state): tạo nút gốc từ trạng thái đầu.", 0.9)
-        if init == self.goal:
-            self.emit(2, "is_goal(node.state) đúng ngay → trả về lời giải rỗng.", 0.8)
-            self.emit(3, "return solution(node)", 0.8, "done")
-            return
-        self.emit(2, "is_goal(problem, node.state)? Chưa phải đích → tiếp tục.", 0.6)
-        self.emit(4, "frontier = Stack(): tạo ngăn xếp LIFO rỗng." if dfs else "frontier = Queue(): tạo hàng đợi FIFO rỗng.", 0.5)
-        root = self.add_node(init, None, None)
-        self.frontier.append(root)
-        self.node_eid = None
-        self.emit(5, "push(frontier, node): đặt nút gốc lên ĐỈNH ngăn xếp." if dfs else "enqueue(frontier, node): bỏ nút gốc vào CUỐI hàng đợi.", 0.9)
-        self.emit(6, "explored = []: tập các trạng thái đã mở, ban đầu rỗng.", 0.5)
-        while self.frontier:
-            self.reset_view()
-            self.emit(7, f"while not is_empty(frontier): {ds} còn {len(self.frontier)} nút → lặp.", 0.4)
-            eid = self.frontier.pop(-1 if dfs else 0)
-            nd = self.nodes[eid]
-            self.node_state, self.node_eid, self.node_depth = nd["state"], eid, nd["depth"]
-            self.emit(8, "pop(frontier): lấy nút ở ĐỈNH ngăn xếp (vào sau, ra trước)." if dfs else "dequeue(frontier): lấy nút ở ĐẦU hàng đợi (vào trước, ra trước).", 0.9)
-            self.explored.append(eid)
-            self.emit(9, "explored.append(node.state): đánh dấu trạng thái này đã được mở.", 0.7)
-            for a in (list(reversed(actions(nd["state"]))) if dfs else actions(nd["state"])):
-                self.reset_view()
-                self.act = a
-                self.emit(10, f"for action in {'reversed(' if dfs else ''}problem.actions(...){')' if dfs else ''}: thử hành động «{a}».", 0.5)
-                self.ckey += 1
-                cs = result(nd["state"], a)
-                self.child = (cs, eid, self.ckey)
-                self.emit(11, f"child_node(problem, node, «{a}»): {ACT_VI[a]}.", 1.0)
-                self.gate[1] = False
-                self.emit(12, f"in_frontier = False: giả sử nút con chưa có trong {ds}.", 0.35)
-                hit = [f for f in self.frontier if self.nodes[f]["state"] == cs]
-                self.scan_match = hit[0] if hit else None
-                self.emit(13, f"for n in frontier: so sánh nút con với từng nút đang chờ trong {ds}.",
-                          0.5 + min(len(self.frontier), 24) * 0.035, "scan")
-                in_frontier = False
-                if hit:
-                    self.match = hit[0]
-                    self.emit(14, "n.state == child.state: TRÙNG với một nút đang chờ!", 0.6)
-                    in_frontier = True
-                    self.gate[1] = True
-                    self.emit(15, "in_frontier = True", 0.4)
-                in_explored = any(self.nodes[e]["state"] == cs for e in self.explored)
-                self.gate[0] = in_explored
-                ok = (not in_explored) and not in_frontier
-                self.verdict = "ok" if ok else "dup"
-                if ok:
-                    why = f"chưa mở và chưa có trong {ds} → nút MỚI, xét tiếp."
-                elif in_explored:
-                    why = "trạng thái này đã nằm trong explored → BỎ."
-                else:
-                    why = "trạng thái này đang chờ trong frontier → BỎ."
-                self.emit(16, "if child.state not in explored and not in_frontier: " + why, 1.0, "check")
-                if not ok:
-                    continue
-                if cs == self.goal:
-                    gid = self.add_node(cs, eid, a)
-                    self.verdict = "goal"
-                    self.child_eid = gid
-                    self.emit(17, "is_goal(problem, child.state): ĐÚNG, đã tới trạng thái đích!", 0.9)
-                    self.path, acts = self.chain(gid)
-                    self.solution = acts
-                    if dfs and len(acts) > 12:
-                        lst = " → ".join(acts[:10]) + f" → … ({len(acts)} bước, DFS không đảm bảo ngắn nhất)"
-                    else:
-                        lst = " → ".join(acts)
-                    self.emit(18, f"return solution(child): lời giải {len(acts)} bước: " + lst, 2.0, "done")
-                    return
-                self.emit(17, "is_goal(problem, child.state)? Chưa phải đích.", 0.5)
-                cid = self.add_node(cs, eid, a)
-                self.frontier.append(cid)
-                self.child_eid = cid
-                self.verdict = "queued"
-                self.emit(19, "push(frontier, child): nút con lên ĐỈNH ngăn xếp, đồng thời thêm vào bảng." if dfs else "enqueue(frontier, child): nút con vào CUỐI hàng đợi, đồng thời thêm vào bảng.", 0.95)
-        self.reset_view()
-        self.emit(20, f"return None: {ds} cạn, không có lời giải.", 1.0, "done")
+def Rec(init, goal, algo):
+    """Chạy thuật toán thật và ghi lại từng dòng (xem tracing/tracer.py)."""
+    return Recording(algo, "vacuum", vacuum.make_problem(init, goal))
 
 
 def sm(v, t, k, dt):
@@ -707,7 +561,7 @@ class BigCard:
         if n != self.n:
             self.n, self.rx, self.dirt = n, None, [1.0 if v == "D" else 0.0 for v in state[1:]]
         sq, x0 = self.layout(n)
-        tx = x0 + state[0] * (sq + 6) + sq / 2
+        tx = x0 + room_index(state) * (sq + 6) + sq / 2
         self.rx = tx if self.rx is None else sm(self.rx, tx, 12, dt)
         for i in range(n):
             self.dirt[i] = sm(self.dirt[i], 1.0 if state[1 + i] == "D" else 0.0, 12, dt)
@@ -767,13 +621,13 @@ def mini_state(state, w, h):
         else:
             pygame.draw.lines(s, (230, 255, 236), False, [(x + sw * 0.28, top + sh * 0.5), (x + sw * 0.45, top + sh * 0.72),
                                                           (x + sw * 0.74, top + sh * 0.28)], max(1, ph // 20))
-    cx, cy = pad + state[0] * (sw + gap) + sw / 2, top + sh / 2
+    cx, cy = pad + room_index(state) * (sw + gap) + sw / 2, top + sh / 2
     rad = min(sw, sh) * 0.38
     pygame.draw.circle(s, (18, 18, 22), (cx, cy), rad)
     pygame.draw.circle(s, (96, 96, 108), (cx, cy), rad, max(1, ph // 24))
     pygame.draw.circle(s, ORANGE, (cx, cy), max(1, rad * 0.32))
     f = pfont("consolas", max(8, int(ph * 0.25)), True)
-    t = f.render(letter(state[0]) + " " + "".join(state[1:]), True, (190, 200, 222))
+    t = f.render(state[0] + " " + "".join(state[1:]), True, (190, 200, 222))
     s.blit(t, t.get_rect(midbottom=(pw // 2, ph - max(1, ph // 14))))
     MINI[key] = s
     return s
@@ -792,14 +646,6 @@ def blit_state(dst, state, cx, cy, w, h, scale=1.0, alpha=1.0):
     dst.blit(img, img.get_rect(center=(round(cx * SC), round(cy * SC))))
     k = scale if owned else 1.0
     return pygame.Rect(round(cx - w * k / 2), round(cy - h * k / 2), round(w * k), round(h * k))
-
-
-PRESETS = [
-    ("2 phòng", 2, 0, "DD", 1),
-    ("3 phòng", 3, 0, "DDD", 2),
-    ("4 phòng", 4, 1, "DCDD", 3),
-    ("6 phòng", 6, 2, "DDCDDD", 5),
-]
 
 
 class App:
@@ -890,9 +736,9 @@ class App:
         return PRESETS
 
     def load_preset(self, i):
-        lab, n, pos, dirt, gpos = PRESETS[i]
+        lab, init, goal = PRESETS[i]
         self.preset = i
-        self.load(n, make_state(pos, [c == "D" for c in dirt]), make_goal(n, gpos))
+        self.load(len(init) - 1, init, goal)
 
     def load(self, n, init, goal):
         self.n, self.init, self.goal = n, init, goal
@@ -913,7 +759,7 @@ class App:
         self.replay = None
         self.node_card.n = self.child_card.n = 0
         self.node_card.rx = self.child_card.rx = None
-        self.s_pos = float(init[0])
+        self.s_pos = float(room_index(init))
         self.s_dirt = [1.0 if v == "D" else 0.0 for v in init[1:]]
         self.s_theta = 0.0
         self.spin = 0.0
@@ -958,7 +804,7 @@ class App:
             self.seek(self.ev_i - 1)
         elif key == "node":
             j = self.ev_i + 1
-            while j < last and self.events[j]["line"] != 8:
+            while j < last and self.events[j]["line"] != take_line(self.algo):
                 j += 1
             self.ev_i, self.ev_t, self.one = min(j, last), 0.0, True
         elif key == "reset":
@@ -974,12 +820,9 @@ class App:
         elif key.startswith("p") and key[1:].isdigit():
             self.load_preset(int(key[1:]))
         elif key == "rand":
-            n = random.randint(2, 6)
-            dirt = [random.random() < 0.6 for _ in range(n)]
-            if not any(dirt):
-                dirt[random.randrange(n)] = True
+            init, goal = random_initial("vacuum", self.algo)
             self.preset = -1
-            self.load(n, make_state(random.randrange(n), dirt), make_goal(n, random.randrange(n)))
+            self.load(len(init) - 1, init, goal)
         elif key == "edit":
             self.open_editor()
         elif key == "replay":
@@ -1004,7 +847,7 @@ class App:
         self.replay = None
         self.editing = True
         n = self.n
-        self.ed = dict(n=n, pos=self.init[0], dirt=[v == "D" for v in self.init[1:]], gpos=self.goal[0])
+        self.ed = dict(n=n, pos=room_index(self.init), dirt=[v == "D" for v in self.init[1:]], gpos=room_index(self.goal))
         mx, my = self.MOD.x, self.MOD.y
         self.ed_buttons = [
             Button((mx + 40, my + 72, 40, 36), "−", "ed_minus"),
@@ -1153,7 +996,7 @@ class App:
 
     def update_scene(self, state, dt):
         sc = self.scene
-        target = float(state[0])
+        target = float(room_index(state))
         old = self.s_pos
         self.s_pos = sm(self.s_pos, target, 5, dt)
         a, b = sc.pos_at(old), sc.pos_at(self.s_pos)
@@ -1310,7 +1153,7 @@ class App:
             text(s, str(val), f2, col, (r.centerx, r.y + 22), "midtop")
             x = r.x - 8
         text(s, "Đích", font("segoeui", 14, True), GREEN, (x - 8, 30), "midright")
-        text(s, f"robot ở {letter(self.goal[0])}, sạch hết", font("segoeui", 13), TEXT, (x - 8, 50), "midright")
+        text(s, f"robot ở {self.goal[0]}, sạch hết", font("segoeui", 13), TEXT, (x - 8, 50), "midright")
         cont = pygame.Rect(458, 10, 448, 64)
         G.rect(s, (16, 21, 34), cont, border_radius=18)
         G.rect(s, PANEL_L, cont, 1, border_radius=18)
@@ -1386,7 +1229,7 @@ class App:
             G.circle(s, (170, 162, 152), (x0 + (x1 - x0) * t, y0 + (y1 - y0) * t), 3)
         ch = ev["child"]
         if ch and not self.replay:
-            a_idx, b_idx = ev["node_state"][0], ch[0][0]
+            a_idx, b_idx = room_index(ev["node_state"]), room_index(ch[0])
             if a_idx != b_idx:
                 a, b = sc.center(a_idx), sc.center(b_idx)
                 for k in range(9):
