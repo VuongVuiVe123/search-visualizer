@@ -69,14 +69,14 @@ const View = {
   layout: {
     W: 1400, H: 900, lh: 20,
     code: { x: 12, y: 92, w: 528, h: 540 }, tab: { x: 552, y: 92, w: 468, h: 540 },
-    qy: 644, ey: 752, barY: 832, btnY: 846, presetX: 800,
+    qy: 644, ey: 752, barY: 832, btnY: 846, presetX: 688,
     qx: 150, qp: 60, qmax: 20, qcard: { w: 46, h: 46 }, ecard: { w: 52, h: 52 }, estep: 58, emax: 20,
     cell: { w: 50, h: 50, gap: 6 },
   },
   tableTitle: "bảng trạng thái theo độ sâu  (mỗi ô = một nút)",
   nodeBoard: new BigBoard(1032 + 356 / 2 - 66, 92 + 56),
   childBoard: new BigBoard(1032 + 356 / 2 - 66, 92 + 56 + 132 + 68),
-  lastChildKey: null,
+  lastChildKey: null, replay: null,
 
   get goal() { return this.problem.goal.slice(); },
   presets(algo) { const ps = this.problem.presets; return ps[algo] || ps[Object.keys(ps)[0]]; },
@@ -84,12 +84,16 @@ const View = {
   subtitle() { return "8-puzzle · mỗi dòng code chạy, hình tương ứng sáng lên"; },
   anchors() { return { child: [this.childBoard.cx, this.childBoard.cy], node: [this.nodeBoard.cx, this.nodeBoard.cy] }; },
   drawCard(state, cx, cy, w, h, sc, al) { return drawCached("p8:" + sk(state), w, h, (g, pw, ph) => drawMiniBoard(g, pw, ph, state), cx, cy, sc, al); },
+  extraButtons() { return [{ w: 140, label: this.replay ? "Dừng" : "Chạy lời giải", key: "replay", active: !!this.replay }]; },
+  keys: { v: "replay" },
+  press(key, E) { if (key === "replay") this.startReplay(E); },
   drawGoal(xr, E) {
     T("Đích", xr - 54, 38, { s: 14, b: 1, c: COL.green, a: "right", v: "middle" });
     this.drawCard(E.goal, xr - 26, 38, 46, 46, 1, 1);
   },
 
   onLoad() {
+    this.replay = null;
     this.nodeBoard.state = null; this.nodeBoard.pos = {};
     this.childBoard.state = null; this.childBoard.pos = {}; this.childBoard.alpha = 0;
     this.lastChildKey = null; this.syncBoards(E.ev, true);
@@ -102,13 +106,35 @@ const View = {
     this.lastChildKey = ck;
     if (snap) for (const b of [nb, cb]) if (b.state) b.state.forEach((v, i) => { if (v) b.pos[v] = b.slot(i); });
   },
-  update(dt, ev) {
-    this.syncBoards(ev);
+  /* ---------- chạy lời giải: bàn cờ lớn trượt lần lượt từng nước từ đầu tới đích ---------- */
+  startReplay(E) {
+    if (this.replay) { this.replay = null; return; }
+    if (!E.rec.solution.length) { E.toast = ["Chưa có lời giải để chạy.", 3]; return; }
+    const path = E.events[E.events.length - 1].path;
+    E.playing = false; E.seek(E.events.length - 1);
+    this.replay = { states: path.map(e => E.rec.nodes[e].state), t: 0, step: 0.8, k: -1 };
+  },
+  updateReplay(dt, E) {
+    const rp = this.replay, nb = this.nodeBoard, last = rp.states.length - 1;
+    rp.t += dt * Math.min(8, Math.max(1, E.speed()));
+    const k = Math.min(last, Math.floor(rp.t / rp.step));
+    if (k !== rp.k) {
+      if (rp.k < 0) { nb.state = null; nb.pos = {}; nb.setState(rp.states[0]); nb.state.forEach((v, i) => { if (v) nb.pos[v] = nb.slot(i); }); }
+      else nb.setState(rp.states[k]);
+      rp.k = k;
+    }
+    if (k >= last && rp.t > last * rp.step + 1.6) this.replay = null;
+  },
+
+  update(dt, ev, E) {
+    if (this.replay) this.updateReplay(dt, E);
+    else this.syncBoards(ev);
     this.nodeBoard.update(dt); this.childBoard.update(dt);
     this.childBoard.alpha = sm(this.childBoard.alpha, ev.child ? 1 : 0.18, 8, dt);
   },
 
   drawMain(ev, p, E) {
+    if (this.replay) { this.drawReplay(E); return; }
     const r = { x: 1032, y: 92, w: 356, h: 540 }, nb = this.nodeBoard, cb = this.childBoard, vb = ev.verdict;
     panel(r, "nút đang xét", COL.orange);
     T("node", nb.x - 2, nb.y - 20, { s: 15, b: 1, c: COL.orange });
@@ -127,10 +153,28 @@ const View = {
     E.drawVerdict(r, cb.y + cb.size + 12, ev);
   },
 
+  drawReplay(E) {
+    const r = { x: 1032, y: 92, w: 356, h: 540 }, nb = this.nodeBoard, rp = this.replay;
+    const k = Math.max(0, rp.k), n = rp.states.length - 1, sol = E.rec.solution;
+    panel(r, "chạy lời giải", COL.gold);
+    T(k === n ? "ĐÃ TỚI ĐÍCH" : `bước ${k} / ${n}`, r.x + r.w / 2, nb.y - 20, { s: 15, b: 1, c: COL.gold, a: "center" });
+    nb.draw(k === n ? COL.green : COL.gold);
+    const cx = r.x + r.w / 2, y = nb.y + nb.size + 12;
+    const act = k >= 1 ? sol[k - 1] : null, g = { "Lên": "↑", "Xuống": "↓", "Trái": "←", "Phải": "→" }[act];
+    fillRR(cx - 74, y, 148, 30, 15, css(shade(COL.gold, 0.3))); strokeRR(cx - 74, y, 148, 30, 15, css(COL.gold), 2);
+    T(act ? `${g}  ${act}` : "trạng thái đầu", cx, y + 15, { s: 18, b: 1, c: COL.gold, a: "center", v: "middle" });
+    const by = y + 52, bw = r.w - 48;
+    fillRR(r.x + 24, by, bw, 8, 4, css(COL.panelL)); fillRR(r.x + 24, by, Math.max(8, bw * k / Math.max(1, n)), 8, 4, css(COL.gold));
+    T("các nước tiếp theo", r.x + 24, by + 24, { s: 13, b: 1, c: COL.muted });
+    const next = sol.slice(k, k + 12).map(a => ({ "Lên": "↑", "Xuống": "↓", "Trái": "←", "Phải": "→" }[a])).join("  ");
+    T(next || "—", r.x + 24, by + 46, { s: 18, b: 1, c: COL.text });
+    T(`Lời giải ${n} bước · bấm "Dừng" hoặc phím V để thoát`, cx, r.y + r.h - 28, { s: 12, c: COL.muted, a: "center" });
+  },
+
   /* ---------- hộp thoại tự đặt trạng thái đầu / đích ---------- */
   editor: {
     active: false, ed: null,
-    open(E) { this.active = true; E.playing = false; this.ed = { init: flat(E.rec.init), goal: flat(E.goal), sel: null }; this.check(E); },
+    open(E) { this.active = true; E.playing = false; View.replay = null; this.ed = { init: flat(E.rec.init), goal: flat(E.goal), sel: null }; this.check(E); },
     cell(which, i) {
       const size = 3 * 70 + 2 * 6, bx = which === "init" ? MOD.x + 56 : MOD.x + MOD.w - 56 - size;
       return { x: bx + (i % 3) * 76, y: MOD.y + 96 + Math.floor(i / 3) * 76, w: 70, h: 70 };

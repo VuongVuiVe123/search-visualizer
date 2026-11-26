@@ -1,4 +1,4 @@
-"""Mô tả một bài toán tìm kiếm (giống code trên lớp).
+"""Mô tả một bài toán tìm kiếm.
 
 Mỗi bài toán (xem thư mục problems/) chỉ cần đưa vào 4 thứ:
     initial_state   trạng thái ban đầu

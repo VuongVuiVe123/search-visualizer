@@ -1,4 +1,4 @@
-"""CORE: phần thuật toán, viết theo đúng cách làm trên lớp.
+"""CORE: phần thuật toán tìm kiếm.
 
 Không có giao diện, không có lời thuyết minh, không có màu sắc. Chỉ có:
     node.py             Node, child_node, solution

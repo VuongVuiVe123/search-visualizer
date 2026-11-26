@@ -1,8 +1,8 @@
-"""Bài toán robot hút bụi, mở rộng từ bản 2 phòng trên lớp ra nhiều phòng (2 đến 6 phòng).
+"""Bài toán robot hút bụi nhiều phòng (2 đến 6 phòng).
 
-Trạng thái giống trên lớp: phần tử đầu là phòng robot đang đứng, sau đó là tình trạng từng phòng.
-    ("A", "D", "D")          trên lớp: robot ở A, phòng A bẩn, phòng B bẩn
-    ("B", "C", "D", "D")     mở rộng 3 phòng: robot ở B, A sạch, B bẩn, C bẩn
+Trạng thái: phần tử đầu là phòng robot đang đứng, sau đó là tình trạng từng phòng.
+    ("A", "D", "D")          2 phòng: robot ở A, phòng A bẩn, phòng B bẩn
+    ("B", "C", "D", "D")     3 phòng: robot ở B, A sạch, B bẩn, C bẩn
 'D' = bẩn (dirty), 'C' = sạch (clean). Các phòng xếp thành hàng A, B, C, ... từ trái sang phải.
 """
 import random
@@ -13,8 +13,8 @@ from core.problem import Problem
 # 1. TRẠNG THÁI BAN ĐẦU / ĐÍCH / BÀI MẪU
 # =====================================================================
 
-INITIAL_STATE = ("A", "D", "D")     # giống trên lớp
-GOAL_STATE = ("B", "C", "C")        # giống trên lớp
+INITIAL_STATE = ("A", "D", "D")
+GOAL_STATE = ("B", "C", "C")
 
 # Các bài mẫu hiện trên giao diện: (nhãn, trạng thái đầu, trạng thái đích).
 PRESETS = [
@@ -64,7 +64,7 @@ def result_vacuum(state, action):
 
 
 # =====================================================================
-# 4. TẠO PROBLEM (giống trên lớp: Problem(initial, goal, actions_vacuum, result_vacuum))
+# 4. TẠO PROBLEM: Problem(initial, goal, actions_vacuum, result_vacuum)
 # =====================================================================
 
 def make_problem(initial_state=INITIAL_STATE, goal_state=GOAL_STATE):

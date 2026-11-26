@@ -1,4 +1,4 @@
-"""Nút của cây tìm kiếm (giống code trên lớp)."""
+"""Nút của cây tìm kiếm."""
 
 
 class Node:

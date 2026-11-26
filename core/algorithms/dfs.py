@@ -1,4 +1,4 @@
-"""Tìm kiếm theo chiều sâu (Depth-First Search), giống code trên lớp.
+"""Tìm kiếm theo chiều sâu (Depth-First Search).
 
 Hàm DFS bên dưới chính là hàm giao diện chạy và hiển thị từng dòng,
 nên sửa ở đây thì giao diện đổi theo.
