@@ -20,7 +20,7 @@ core/                    ① THUẬT TOÁN (giống trên lớp, không có giao
     __init__.py          ALGORITHMS = danh sách thuật toán
 
 problems/                ② BÀI TOÁN
-  puzzle8.py             trạng thái đầu / đích / bài mẫu, actions_puzzle8, result_puzzle8
+  puzzle8.py             trạng thái đầu / đích / bài mẫu, find_blank, actions_8puzzle, result_8puzzle
   vacuum.py              trạng thái đầu / đích / bài mẫu, actions_vacuum, result_vacuum, chi_so_phong
   __init__.py            PROBLEMS = danh sách bài toán
 
@@ -54,7 +54,7 @@ Quy tắc: tầng sau chỉ được dùng tầng trước. `core/` không biế
 | Lớp Problem, kiểm tra đích | `core/problem.py` | `Problem`, `is_goal` |
 | **Trạng thái đầu / đích của 8-puzzle** | `problems/puzzle8.py` | `INITIAL_STATE`, `GOAL_STATE` |
 | Các bài mẫu 8-puzzle (nút "Bài mẫu") | `problems/puzzle8.py` | `PRESETS` |
-| Hành động / kết quả hành động 8-puzzle | `problems/puzzle8.py` | `actions_puzzle8`, `result_puzzle8` |
+| Hành động / kết quả hành động 8-puzzle | `problems/puzzle8.py` | `find_blank`, `actions_8puzzle`, `result_8puzzle` |
 | Kiểm tra 8-puzzle giải được không | `problems/puzzle8.py` | `solvable` |
 | **Trạng thái đầu / đích robot hút bụi** | `problems/vacuum.py` | `INITIAL_STATE`, `GOAL_STATE` |
 | Hành động / kết quả robot hút bụi | `problems/vacuum.py` | `actions_vacuum`, `result_vacuum`, `chi_so_phong` |

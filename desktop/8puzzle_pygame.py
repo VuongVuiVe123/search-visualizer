@@ -58,6 +58,17 @@ LIMIT = {k: v["limit"] for k, v in ALGORITHM_INFO.items()}
 solvable = puzzle8.solvable
 
 
+def flat(state):
+    """Bàn 3x3 ((1, 2, 3), ...) -> 9 ô (1, 2, 3, ...) để vẽ."""
+    return tuple(v for row in state for v in row)
+
+
+def grid(cells):
+    """Ngược lại với flat: 9 ô -> bàn 3x3."""
+    cells = tuple(cells)
+    return (cells[0:3], cells[3:6], cells[6:9])
+
+
 def quick_stats(init, goal, algo="bfs"):
     """(số bước, số nút đã mở) hoặc None nếu bài quá lớn để trình chiếu."""
     return quick(algo, puzzle8.make_problem(init, goal))
@@ -150,7 +161,7 @@ def mini_surface(state, size):
     pad, gap = max(2, ps // 12), max(1, ps // 26)
     ts = (ps - 2 * pad - 2 * gap) // 3
     f = pfont("segoeui", max(8, int(ts * 0.78)), True)
-    for i, v in enumerate(state):
+    for i, v in enumerate(flat(state)):
         r, c = divmod(i, 3)
         rect = pygame.Rect(pad + c * (ts + gap), pad + r * (ts + gap), ts, ts)
         if v == 0:
@@ -239,6 +250,7 @@ class BigBoard:
         return 8 + c * step, 8 + r * step
 
     def set_state(self, state, copy_from=None):
+        state = flat(state)
         self.state = state
         if copy_from is not None:
             for v, p in copy_from.pos.items():
@@ -470,7 +482,7 @@ class App:
     def open_editor(self):
         self.playing = False
         self.editing = True
-        self.ed = dict(init=list(self.rec.init), goal=list(self.goal), sel=None)
+        self.ed = dict(init=list(flat(self.rec.init)), goal=list(flat(self.goal)), sel=None)
         mx, my = self.MOD.x, self.MOD.y
         self.ed_buttons = [
             Button((mx + 56, my + 330, 222, 36), "Xáo ngẫu nhiên", "ed_shuffle"),
@@ -481,7 +493,7 @@ class App:
         self.ed_check()
 
     def ed_check(self):
-        init, goal = tuple(self.ed["init"]), tuple(self.ed["goal"])
+        init, goal = grid(self.ed["init"]), grid(self.ed["goal"])
         if not solvable(init, goal):
             self.ed.update(ok=False, col=RED, msg="Không giải được: hai bàn cờ khác tính chẵn lẻ. Hãy đổi chỗ thêm một cặp ô.")
             return
@@ -532,14 +544,14 @@ class App:
             if self.ed["ok"]:
                 self.editing = False
                 self.preset = -1
-                self.load(tuple(self.ed["init"]), tuple(self.ed["goal"]))
+                self.load(grid(self.ed["init"]), grid(self.ed["goal"]))
         elif key == "ed_std":
-            self.ed["goal"] = list(GOAL)
+            self.ed["goal"] = list(flat(GOAL))
             self.ed["sel"] = None
             self.ed_check()
         elif key == "ed_shuffle":
-            st, _ = random_initial("puzzle8", self.algo, self.ed["goal"])
-            self.ed["init"] = list(st)
+            st, _ = random_initial("puzzle8", self.algo, grid(self.ed["goal"]))
+            self.ed["init"] = list(flat(st))
             self.ed["sel"] = None
             self.ed_check()
 
@@ -626,7 +638,7 @@ class App:
 
     def sync_boards(self, snap=False):
         ev = self.ev
-        if self.node_board.state != ev["node_state"]:
+        if self.node_board.state != flat(ev["node_state"]):
             self.node_board.set_state(ev["node_state"])
         ch = ev["child"]
         ck = ch[2] if ch else None

@@ -2,8 +2,11 @@
 
 /* View của bài 8-puzzle: CHỈ VẼ bàn cờ 3x3 trượt ô, thẻ trạng thái, hộp thoại tự đặt.
    Trạng thái đầu, đích và các bài mẫu khai báo ở problems/puzzle8.py (Python),
-   tệp này đọc chúng qua View.problem (nạp lúc khởi động trong engine.js). */
+   tệp này đọc chúng qua View.problem (nạp lúc khởi động trong engine.js).
+   Trạng thái từ Python là bàn 3x3 [[1,2,3],[4,0,6],[7,5,8]]; để vẽ thì trải phẳng thành 9 ô. */
 
+const flat = state => state.flat();                                  // [[1,2,3],...] -> [1,2,3,...]
+const grid = a => [a.slice(0, 3), a.slice(3, 6), a.slice(6, 9)];      // ngược lại
 const TILE = { 1: [239, 122, 122], 2: [240, 170, 110], 3: [240, 214, 110], 4: [150, 215, 120], 5: [100, 210, 190], 6: [100, 170, 240], 7: [150, 130, 240], 8: [210, 130, 220] };
 
 class BigBoard {
@@ -13,6 +16,7 @@ class BigBoard {
   }
   slot(i) { const r = Math.floor(i / 3), c = i % 3, st = this.ts + 4; return [8 + c * st, 8 + r * st]; }
   setState(state, from) {
+    state = flat(state);
     this.state = state;
     if (from) for (const v in from.pos) this.pos[v] = from.pos[v].slice();
     state.forEach((v, i) => { if (v && !this.pos[v]) this.pos[v] = this.slot(i); });
@@ -51,7 +55,7 @@ function drawMiniBoard(g, pw, ph, state) {
   g.fillStyle = "rgb(26,33,52)"; rad(0, 0, pw, pw, Math.max(4, pw / 7)); g.fill();
   const pad = Math.max(2, pw / 12), gap = Math.max(1, pw / 26), ts = (pw - 2 * pad - 2 * gap) / 3;
   g.textAlign = "center"; g.textBaseline = "middle"; g.font = `bold ${Math.max(8, ts * 0.78)}px ${SANS}`;
-  state.forEach((v, i) => {
+  flat(state).forEach((v, i) => {
     const r = Math.floor(i / 3), c = i % 3, x = pad + c * (ts + gap), y = pad + r * (ts + gap);
     g.fillStyle = v ? css(TILE[v]) : "rgb(12,16,26)"; rad(x, y, ts, ts, 3); g.fill();
     if (v) { g.fillStyle = "rgb(26,26,40)"; g.fillText(String(v), x + ts / 2, y + ts / 2 + ts * 0.04); }
@@ -126,7 +130,7 @@ const View = {
   /* ---------- hộp thoại tự đặt trạng thái đầu / đích ---------- */
   editor: {
     active: false, ed: null,
-    open(E) { this.active = true; E.playing = false; this.ed = { init: E.rec.init.slice(), goal: E.goal.slice(), sel: null }; this.check(E); },
+    open(E) { this.active = true; E.playing = false; this.ed = { init: flat(E.rec.init), goal: flat(E.goal), sel: null }; this.check(E); },
     cell(which, i) {
       const size = 3 * 70 + 2 * 6, bx = which === "init" ? MOD.x + 56 : MOD.x + MOD.w - 56 - size;
       return { x: bx + (i % 3) * 76, y: MOD.y + 96 + Math.floor(i / 3) * 76, w: 70, h: 70 };
@@ -141,8 +145,8 @@ const View = {
     },
     check(E) {
       const ed = this.ed, al = E.algos[E.algo], nm = al.name;
-      if (!PY.solvable("puzzle8", ed.init, ed.goal)) { ed.ok = false; ed.col = COL.red; ed.msg = "Không giải được: hai bàn cờ khác tính chẵn lẻ. Hãy đổi chỗ thêm một cặp ô."; return; }
-      const st = E.quick(ed.init, ed.goal);
+      if (!PY.solvable("puzzle8", grid(ed.init), grid(ed.goal))) { ed.ok = false; ed.col = COL.red; ed.msg = "Không giải được: hai bàn cờ khác tính chẵn lẻ. Hãy đổi chỗ thêm một cặp ô."; return; }
+      const st = E.quick(grid(ed.init), grid(ed.goal));
       if (!st) { ed.ok = false; ed.col = COL.orange; ed.msg = `Giải được nhưng quá lớn: ${nm} phải mở hơn ${al.limit} nút, khó theo dõi. Hãy đặt gần đích hơn.`; }
       else if (st[0] === 0) { ed.ok = true; ed.col = COL.green; ed.msg = "Trạng thái đầu đã bằng đích: 0 bước."; }
       else { ed.ok = true; ed.col = COL.green; ed.msg = `${nm} tìm được lời giải ${st[0]} bước, mở ${st[1]} nút.`; }
@@ -150,9 +154,9 @@ const View = {
     press(key, E) {
       const ed = this.ed;
       if (key === "cancel") this.active = false;
-      else if (key === "apply") { if (ed.ok) { this.active = false; E.preset = -1; E.load(ed.init.slice(), ed.goal.slice()); } }
-      else if (key === "std") { ed.goal = View.goal; ed.sel = null; this.check(E); }
-      else if (key === "shuffle") { ed.init = PY.random("puzzle8", E.algo, ed.goal)[0]; ed.sel = null; this.check(E); }
+      else if (key === "apply") { if (ed.ok) { this.active = false; E.preset = -1; E.load(grid(ed.init), grid(ed.goal)); } }
+      else if (key === "std") { ed.goal = flat(View.goal); ed.sel = null; this.check(E); }
+      else if (key === "shuffle") { ed.init = flat(PY.random("puzzle8", E.algo, grid(ed.goal))[0]); ed.sel = null; this.check(E); }
     },
     click(m, E) {
       for (const b of this.buttons()) if (inRect(m, b)) { this.press(b.key, E); return; }
