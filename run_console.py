@@ -1,8 +1,8 @@
-"""Chạy thuật toán ngay trong cửa sổ dòng lệnh, không cần giao diện (giống notebook trên lớp).
+"""Chạy thuật toán ngay trong cửa sổ dòng lệnh, không cần giao diện (giống bài trên lớp).
 
-    python run_console.py                  DFS, robot hút bụi (giống notebook vacuum_DFS.ipynb)
+    python run_console.py                  DFS, robot hút bụi (giống bài trên lớp)
     python run_console.py bfs              BFS, robot hút bụi
-    python run_console.py dfs puzzle8      DFS, 8-puzzle
+    python run_console.py dfs puzzle8      DFS, 8-puzzle (giống bài trên lớp)
 
 Trạng thái đầu / đích lấy từ INITIAL_STATE / GOAL_STATE trong problems/<tên bài>.py.
 """
@@ -13,7 +13,11 @@ from problems import PROBLEMS
 
 
 def print_state(state):
-    print("[" + ", ".join(str(v) for v in state) + "]")
+    if isinstance(state[0], tuple):          # bàn cờ 3x3 (8-puzzle): in từng hàng
+        for row in state:
+            print(list(row))
+    else:                                    # robot hút bụi: in trên một dòng
+        print("[" + ", ".join(state) + "]")
     print()
 
 

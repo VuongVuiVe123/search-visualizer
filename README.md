@@ -3,7 +3,7 @@
 Trực quan hóa thuật toán tìm kiếm (BFS, DFS) trên hai bài toán: **8-puzzle** và **robot hút bụi nhiều phòng**.
 Mỗi dòng code đang chạy sáng lên và hiện đúng thứ nó làm trên hình (frontier, explored, bảng node).
 
-Phát triển từ bài trên lớp [`notebooks/vacuum_DFS.ipynb`](notebooks/vacuum_DFS.ipynb): thuật toán viết theo đúng
+Phát triển từ bài DFS robot hút bụi trên lớp: thuật toán viết theo đúng
 cách làm trên lớp (`Node`, `child_node`, `solution`, `Stack`/`push`/`pop`, `Problem`, `DFS(problem)`),
 giao diện chạy **chính hàm đó** và ghi lại từng dòng, không có bản viết lại riêng cho giao diện.
 
@@ -20,7 +20,7 @@ core/                    ① THUẬT TOÁN (giống trên lớp, không có giao
     __init__.py          ALGORITHMS = danh sách thuật toán
 
 problems/                ② BÀI TOÁN
-  puzzle8.py             trạng thái đầu / đích / bài mẫu, actions_puzzle8, result_puzzle8
+  puzzle8.py             trạng thái đầu / đích / bài mẫu, find_blank, actions_8puzzle, result_8puzzle
   vacuum.py              trạng thái đầu / đích / bài mẫu, actions_vacuum, result_vacuum, chi_so_phong
   __init__.py            PROBLEMS = danh sách bài toán
 
@@ -39,8 +39,7 @@ web/                     ④ GIAO DIỆN WEB (chỉ vẽ)
 desktop/                 ④ GIAO DIỆN PYGAME (chỉ vẽ, dùng lại core/ problems/ tracing/)
 
 index.html               trang chủ (GitHub Pages cần tệp này ở thư mục gốc)
-run_console.py           chạy thuật toán trong cửa sổ dòng lệnh, không giao diện (giống notebook)
-notebooks/               bài gốc trên lớp để đối chiếu
+run_console.py           chạy thuật toán trong cửa sổ dòng lệnh, không giao diện (giống bài trên lớp)
 ```
 
 Quy tắc: tầng sau chỉ được dùng tầng trước. `core/` không biết gì về giao diện; `web/` và `desktop/` không chứa thuật toán.
@@ -55,7 +54,7 @@ Quy tắc: tầng sau chỉ được dùng tầng trước. `core/` không biế
 | Lớp Problem, kiểm tra đích | `core/problem.py` | `Problem`, `is_goal` |
 | **Trạng thái đầu / đích của 8-puzzle** | `problems/puzzle8.py` | `INITIAL_STATE`, `GOAL_STATE` |
 | Các bài mẫu 8-puzzle (nút "Bài mẫu") | `problems/puzzle8.py` | `PRESETS` |
-| Hành động / kết quả hành động 8-puzzle | `problems/puzzle8.py` | `actions_puzzle8`, `result_puzzle8` |
+| Hành động / kết quả hành động 8-puzzle | `problems/puzzle8.py` | `find_blank`, `actions_8puzzle`, `result_8puzzle` |
 | Kiểm tra 8-puzzle giải được không | `problems/puzzle8.py` | `solvable` |
 | **Trạng thái đầu / đích robot hút bụi** | `problems/vacuum.py` | `INITIAL_STATE`, `GOAL_STATE` |
 | Hành động / kết quả robot hút bụi | `problems/vacuum.py` | `actions_vacuum`, `result_vacuum`, `chi_so_phong` |
@@ -68,7 +67,7 @@ Quy tắc: tầng sau chỉ được dùng tầng trước. `core/` không biế
 
 ## Chạy thử
 
-Không cần giao diện (giống notebook):
+Không cần giao diện (giống bài trên lớp):
 
 ```
 python run_console.py                # DFS, robot hút bụi
