@@ -1,8 +1,12 @@
 """Lời thuyết minh tiếng Việt cho từng dòng code của thuật toán.
 
 Mỗi dòng code của thuật toán được nhận ra bằng nội dung của nó (ROLES bên dưới),
-ví dụ dòng "node = pop(frontier)" có vai trò "take". Nhờ vậy BFS, DFS, và các thuật toán
+ví dụ dòng "node = pop(frontier)" có vai trò "take". Nhờ vậy BFS, DFS, UCS và các thuật toán
 sau này viết cùng kiểu đều dùng chung bộ lời thuyết minh này.
+
+Hai dòng "if is_goal(problem, node.state):" và "return solution(node)" có hai nghĩa:
+trước dòng "take" là kiểm tra nút gốc (BFS, DFS); sau dòng "take" là kiểm tra nút vừa lấy ra (UCS).
+tracer.py đổi vai trò của chúng thành "goal_take" / "return_take" trong trường hợp sau.
 
 Thêm thuật toán có dòng code kiểu mới: thêm mẫu vào ROLES và một câu vào caption().
 """
@@ -10,7 +14,7 @@ import re
 
 # (vai trò, mẫu nhận dạng nội dung dòng code). Xét lần lượt từ trên xuống.
 ROLES = [
-    ("make_root",   r"^node = Node\(problem\.initial_state\)$"),
+    ("make_root",   r"^node = Node\(problem\.initial_state(, path_cost=0)?\)$"),
     ("goal_root",   r"^if is_goal\(problem, node\.state\):$"),
     ("return_root", r"^return solution\(node\)$"),
     ("new_frontier", r"^frontier = \w+\(\)$"),
@@ -26,6 +30,10 @@ ROLES = [
     ("compare",     r"^if n\.state == child\.state:$"),
     ("flag_true",   r"^in_frontier = True$"),
     ("check",       r"^if child\.state not in explored and not in_frontier:$"),
+    ("find_old",    r"^old = find_in_frontier\(frontier, child\.state\)$"),
+    ("check_old",   r"^if child\.state not in explored and old is None:$"),
+    ("better",      r"^elif old is not None and old\.path_cost > child\.path_cost:$"),
+    ("replace",     r"^frontier\.remove\(old\)$"),
     ("goal_child",  r"^if is_goal\(problem, child\.state\):$"),
     ("return_child", r"^return solution\(child\)$"),
     ("add_child",   r"^\w+\(frontier, child\)$"),
@@ -47,25 +55,31 @@ DURATION = {
     "new_explored": 0.5, "loop": 0.4, "take": 0.9, "mark": 0.7, "for_action": 0.5, "make_child": 1.0,
     "flag_false": 0.35, "compare": 0.6, "flag_true": 0.4, "check": 1.0, "goal_child": 0.5,
     "return_child": 2.0, "add_child": 0.95, "return_none": 1.0,
+    "goal_take": 0.6, "return_take": 2.0, "check_old": 1.0, "better": 1.0, "replace": 0.8,
 }
 
 
 def duration(role, c):
     if role == "goal_root" and c["is_goal"]:
         return 0.8
-    if role == "goal_child" and c["is_goal"]:
+    if role in ("goal_child", "goal_take") and c["is_goal"]:
         return 0.9
-    if role == "scan":
+    if role in ("scan", "find_old"):
         return 0.5 + min(c["frontier_len"], 24) * 0.035
-    return DURATION[role]
+    return DURATION.get(role, 0.6)      # dòng code lạ (vd. thêm print để thử): vẫn hiện 0.6 giây
 
 
 def caption(role, c):
     """c: thông tin lúc dòng vừa chạy xong (xem Tracer._context trong tracer.py)."""
     stack = c["frontier_kind"] == "stack"
-    ds = "ngăn xếp" if stack else "hàng đợi"
+    prio = c["frontier_kind"] == "priority"
+    ds = "ngăn xếp" if stack else ("hàng đợi ưu tiên" if prio else "hàng đợi")
     call = c["call"]        # tên hàm trên dòng đó, vd "push", "enqueue", "Stack"
 
+    if prio:
+        text = _caption_priority(role, c, call)
+        if text is not None:
+            return text
     if role == "make_root":
         return "node = Node(initial_state): tạo nút gốc từ trạng thái đầu."
     if role == "goal_root":
@@ -129,3 +143,50 @@ def caption(role, c):
     if role == "return_none":
         return f"return None: {ds} cạn, không có lời giải."
     return c["line"].strip()
+
+
+def _caption_priority(role, c, call):
+    """Lời thuyết minh riêng cho thuật toán dùng hàng đợi ưu tiên theo chi phí g (UCS).
+    Trả về None thì dùng câu chung ở caption()."""
+    if role == "make_root":
+        return "node = Node(initial_state, path_cost=0): tạo nút gốc, chi phí g = 0."
+    if role == "new_frontier":
+        return f"frontier = {call}(): tạo hàng đợi ưu tiên rỗng (nút có g nhỏ nhất luôn đứng đầu)."
+    if role == "add_root":
+        return f"{call}(frontier, node): đưa nút gốc (g = 0) vào hàng đợi ưu tiên."
+    if role == "take":
+        return f"{call}(frontier): lấy nút ở ĐẦU hàng đợi ưu tiên, tức nút có chi phí NHỎ NHẤT (g = {c['node_cost']})."
+    if role == "goal_take":
+        if c["is_goal"]:
+            return "is_goal(problem, node.state): ĐÚNG! UCS kiểm tra đích khi LẤY nút ra, nên đây là đường rẻ nhất."
+        return "is_goal(problem, node.state)? Chưa phải đích → mở rộng nút này."
+    if role == "return_take":
+        acts = c["solution"]
+        lst = " → ".join(acts) if len(acts) <= 12 else " → ".join(acts[:10]) + " → …"
+        return f"return solution(node): lời giải {len(acts)} bước, tổng chi phí g = {c['node_cost']}: " + lst
+    if role == "make_child":
+        return (f"child_node(problem, node, «{c['action']}»): {c['describe']}; "
+                f"g = {c['node_cost']} + {c['child_cost'] - c['node_cost']} = {c['child_cost']}.")
+    if role == "find_old":
+        if c["old_cost"] is None:
+            return "old = find_in_frontier(...): trạng thái này KHÔNG có trong frontier → old = None."
+        return f"old = find_in_frontier(...): trạng thái này ĐANG chờ trong frontier với g = {c['old_cost']}."
+    if role == "check_old":
+        head = "if child.state not in explored and old is None: "
+        if c["in_explored"]:
+            return head + "trạng thái này đã nằm trong explored → BỎ."
+        if c["old_cost"] is not None:
+            return head + "đã có trong frontier → sang dòng elif so sánh chi phí."
+        return head + "chưa mở, chưa có trong frontier → nút MỚI, đưa vào hàng đợi."
+    if role == "better":
+        head = "elif old is not None and old.path_cost > child.path_cost: "
+        if c["old_cost"] is None:
+            return head + "không có nút cũ để so → BỎ nút con."
+        if c["old_cost"] > c["child_cost"]:
+            return head + f"g cũ {c['old_cost']} > g mới {c['child_cost']} → đường mới RẺ HƠN, thay nút cũ."
+        return head + f"g cũ {c['old_cost']} ≤ g mới {c['child_cost']} → giữ nút cũ, BỎ nút con."
+    if role == "replace":
+        return f"frontier.remove(old): xóa nút cũ (g = {c['old_cost']}) khỏi hàng đợi."
+    if role == "add_child":
+        return f"{call}(frontier, child): chèn nút con (g = {c['child_cost']}) vào hàng đợi theo thứ tự g tăng dần."
+    return None

@@ -166,13 +166,27 @@ const E = {
     } catch (e) { st.textContent = "Không khởi động được: " + e.message; console.error(e); }
   },
 
+  /* Công tắc chọn thuật toán ở đầu trang: 2 thẻ thì rộng, từ 3 thẻ trở lên thì thu gọn chữ. */
   layoutSwitch() {
-    const n = this.keys.length, cw = (440 - (n - 1) * 8) / n;
-    this.keys.forEach((k, i) => { this.swRects[k] = { x: 462 + i * (cw + 8), y: 16, w: cw, h: 52 }; });
+    const n = this.keys.length, wide = n <= 2, x0 = wide ? 462 : 420, total = wide ? 440 : 486;
+    const cw = (total - (n - 1) * 8) / n;
+    this.sw = { x0, total, nameX: wide ? 18 : 12, nameS: wide ? 26 : 22, lx: wide ? 90 : 64, l2S: wide ? 12 : 11 };
+    this.keys.forEach((k, i) => { this.swRects[k] = { x: x0 + i * (cw + 8), y: 16, w: cw, h: 52 }; });
   },
 
   get presets() { return this.view.presets(this.algo); },
   get isStack() { return this.algos[this.algo].frontier === "stack"; },
+  get isPriority() { return this.algos[this.algo].frontier === "priority"; },
+  get hasCost() { return !!this.algos[this.algo].cost; },
+  /* Huy hiệu nhỏ ghi chi phí g ở góc trên bên phải một thẻ trạng thái (chỉ với thuật toán có chi phí, vd. UCS). */
+  costBadge(r, g, al = 1) {
+    if (!this.hasCost || g === undefined || g === null) return;
+    const t = String(g), w = Math.max(17, tw(t, 11, 1) + 9);
+    ctx.save(); ctx.globalAlpha = al;
+    fillRR(r.x + r.w - w + 5, r.y - 7, w, 15, 7, css(this.acc));
+    T(t, r.x + r.w - w / 2 + 5, r.y + 0.5, { s: 11, b: 1, c: [16, 14, 30], a: "center", v: "middle" });
+    ctx.restore();
+  },
   get ev() { return this.events[this.evI]; },
   speed() { return SPEEDS[this.speedI]; },
   seek(i) { this.evI = Math.max(0, Math.min(this.events.length - 1, i)); this.evT = 0; this.one = false; },
@@ -354,7 +368,8 @@ const E = {
     const acc = this.acc, al = this.algos[this.algo];
     T(al.full, 16, 8, { s: 28, b: 1, c: acc });
     T(this.view.subtitle(this), 18, 50, { s: 15, c: COL.muted });
-    const chips = [["Đã mở", ev.explored.length, COL.orange], ["Frontier", ev.frontier.length, COL.blue], ["Nút sinh ra", ev.tn, COL.cyan], ["Độ sâu", ev.nodeDepth, COL.gold]];
+    const chips = [["Đã mở", ev.explored.length, COL.orange], ["Frontier", ev.frontier.length, COL.blue], ["Nút sinh ra", ev.tn, COL.cyan],
+      this.hasCost ? ["Chi phí g", ev.nodeCost, COL.gold] : ["Độ sâu", ev.nodeDepth, COL.gold]];
     let x = W - 16;
     for (const [name, val, col] of chips.slice().reverse()) {
       const w = Math.max(tw(name, 13), 36) + 26;
@@ -363,19 +378,30 @@ const E = {
       x -= w + 8;
     }
     this.view.drawGoal(x - 8, this);
-    fillRR(458, 10, 448, 64, 18, "rgb(16,21,34)"); strokeRR(458, 10, 448, 64, 18, css(COL.panelL), 1);
+    const sw = this.sw;
+    fillRR(sw.x0 - 4, 10, sw.total + 8, 64, 18, "rgb(16,21,34)"); strokeRR(sw.x0 - 4, 10, sw.total + 8, 64, 18, css(COL.panelL), 1);
     const r0 = this.swRects[this.algo];
     fillRR(this.swX - 4, 12, r0.w + 8, 60, 18, css(shade(acc, 0.35))); fillRR(this.swX, 16, r0.w, 52, 14, css(acc));
     for (const k of this.keys) {
       const r = this.swRects[k], on = k === this.algo, a = this.algos[k];
       const c = on ? [10, 22, 30] : inRect(mouse, r) ? COL.text : COL.muted;
-      T(a.name, r.x + 18, r.y + 26, { s: 26, b: 1, c, v: "middle" });
-      T(a.l1, r.x + 90, r.y + 17, { s: 13, b: 1, c, v: "middle" }); T(a.l2, r.x + 90, r.y + 35, { s: 12, c, v: "middle" });
+      T(a.name, r.x + sw.nameX, r.y + 26, { s: sw.nameS, b: 1, c, v: "middle" });
+      T(a.l1, r.x + sw.lx, r.y + 17, { s: 13, b: 1, c, v: "middle" }); T(a.l2, r.x + sw.lx, r.y + 35, { s: sw.l2S, c, v: "middle" });
     }
   },
 
+  /* Cỡ chữ của khung code: 14px, thu nhỏ dần (tối thiểu 10px) nếu dòng dài nhất không vừa khung. */
+  codeSize(al) {
+    if (al.fontSize) return al.fontSize;
+    const avail = this.view.layout.code.w - 60;
+    const widest = sz => Math.max(...al.code.map(ln => tokenize(ln).reduce((w, [t]) => w + tw(t, sz, false, true), 0)));
+    let fs = 14;
+    while (fs > 10 && widest(fs) > avail) fs -= 0.5;
+    return (al.fontSize = fs);
+  },
+
   drawCode(ev) {
-    const L = this.view.layout, r = L.code, acc = this.acc, al = this.algos[this.algo];
+    const L = this.view.layout, r = L.code, acc = this.acc, al = this.algos[this.algo], fs = this.codeSize(al);
     panel(r, `mã nguồn  ${al.name}(problem)`, acc);
     strokeRR(r.x, r.y, r.w, r.h, 14, css(shade(acc, 0.6)), 2);
     fillRR(r.x + 8, this.barY, r.w - 16, L.lh, 6, "rgb(24,32,52)");
@@ -386,8 +412,8 @@ const E = {
       T(String(i + 1), r.x + 34, y + 3, { s: 13, f: "m", c: act ? acc : [70, 82, 110], a: "right" });
       let x = r.x + 46;
       for (const [s, c] of tokenize(ln)) {
-        T(s, x, y + 3, { s: 14, f: "m", c: act ? c : shade(c, 0.5) });
-        x += tw(s, 14, false, true);
+        T(s, x, y + 3 + (14 - fs) / 2, { s: fs, f: "m", c: act ? c : shade(c, 0.5) });
+        x += tw(s, fs, false, true);
       }
     });
     T(`dòng ${ev.line + 1} · sự kiện ${this.evI + 1}/${this.events.length}`, r.x + r.w - 14, r.y + 12, { s: 13, c: COL.muted, a: "right" });
@@ -427,6 +453,7 @@ const E = {
       if (e === ev.nodeEid) strokeRR(r.x - 5, r.y - 5, r.w + 10, r.h + 10, 10, css(shade(COL.orange, 0.45)), 2);
       if (e === ev.match) col = COL.red;
       strokeRR(r.x - 1, r.y - 1, r.w + 2, r.h + 2, 8, css(col), bw);
+      this.costBadge(r, nodes[e].cost, al);
     }
     const ne = ev.nodeEid;
     if (ne !== null && this.animTab.has(ne) && this.animTab.has(nodes[ne].parent)) {
@@ -452,7 +479,7 @@ const E = {
   /* Hai đèn kiểm tra + biểu ngữ kết luận, dùng chung cho mọi bài toán. */
   drawVerdict(r, y, ev, o = {}) {
     const rowH = o.rowH || 28, lampR = o.lampR || 8, fs = o.fs || 13, bw = o.bw || 260, bh = o.bh || 34, bdy = o.bdy || 62;
-    ["child.state in explored ?", "in_frontier ?"].forEach((label, k) => {
+    (this.algos[this.algo].gates || ["child.state in explored ?", "in_frontier ?"]).forEach((label, k) => {
       const yy = y + k * rowH, col = this.lamps[k];
       circle(r.x + 26, yy + rowH / 2 - 3, lampR + 3, css(shade(col, 0.4))); circle(r.x + 26, yy + rowH / 2 - 3, lampR, css(col));
       T(label, r.x + 46, yy + 3, { s: fs, f: "m" });
@@ -461,8 +488,9 @@ const E = {
     });
     const vb = ev.verdict;
     if (vb) {
-      const msg = { ok: "Nút mới → xét tiếp", dup: "Trùng → BỎ", goal: "ĐÍCH!", queued: this.isStack ? "Vào ngăn xếp" : "Vào hàng đợi" }[vb];
-      const col = { ok: COL.green, dup: COL.red, goal: COL.gold, queued: COL.green }[vb];
+      const queued = this.isStack ? "Vào ngăn xếp" : this.isPriority ? "Vào hàng đợi ưu tiên" : "Vào hàng đợi";
+      const msg = { ok: "Nút mới → xét tiếp", dup: "Trùng → BỎ", goal: "ĐÍCH!", queued, replace: "Rẻ hơn → thay nút cũ" }[vb];
+      const col = { ok: COL.green, dup: COL.red, goal: COL.gold, queued: COL.green, replace: COL.gold }[vb];
       const e = 1 - Math.pow(1 - Math.min(1, this.bannerAge / 0.3), 3), w = bw * (0.6 + 0.4 * e), cx = r.x + r.w / 2, yy = y + bdy;
       fillRR(cx - w / 2, yy, w, bh, bh / 2, css(shade(col, 0.28))); strokeRR(cx - w / 2, yy, w, bh, bh / 2, css(col), 2);
       T(msg, cx, yy + bh / 2, { s: bh > 30 ? 17 : 15, b: 1, c: col, a: "center", v: "middle", al: e });
@@ -473,7 +501,7 @@ const E = {
     const L = this.view.layout, qy = L.qy, acc = this.acc, dfs = this.isStack, QX = L.qx, QP = L.qp, QMAX = L.qmax, cw = L.qcard.w, ch = L.qcard.h;
     const rect = { x: 12, y: qy, w: W - 24, h: 100 };
     panel(rect); strokeRR(rect.x, rect.y, rect.w, rect.h, 14, css(shade(acc, 0.6)), 2);
-    T("FRONTIER", 26, qy + 18, { s: 15, b: 1, c: acc }); T(dfs ? "ngăn xếp LIFO" : "hàng đợi FIFO", 26, qy + 40, { s: 13, c: COL.muted });
+    T("FRONTIER", 26, qy + 18, { s: 15, b: 1, c: acc }); T(dfs ? "ngăn xếp LIFO" : this.isPriority ? "ưu tiên theo g" : "hàng đợi FIFO", 26, qy + 40, { s: 13, c: COL.muted });
     T(`${ev.frontier.length} nút`, 26, qy + 62, { s: 13, c: COL.muted });
     const bx = QX - 8, by = qy + 28, bw = QMAX * QP + 2, bh = 64;
     fillRR(bx, by, bw, bh, 10, "rgb(14,20,34)");
@@ -482,14 +510,15 @@ const E = {
       T("ĐÁY" + (hidden ? `  (+${hidden} nút ẩn)` : ""), bx + 4, qy + 8, { s: 12, b: 1, c: COL.muted });
       T("ĐỈNH  (push / pop)", bx + bw - 4, qy + 8, { s: 12, b: 1, c: COL.green, a: "right" });
     } else {
-      T("HEAD  (dequeue)", bx + 4, qy + 8, { s: 12, b: 1, c: COL.green });
-      T("TAIL  (enqueue)", bx + bw - 4, qy + 8, { s: 12, b: 1, c: COL.orange, a: "right" });
+      const prio = this.isPriority;
+      T(prio ? "ĐẦU: g nhỏ nhất  (pop)" : "HEAD  (dequeue)", bx + 4, qy + 8, { s: 12, b: 1, c: COL.green });
+      T(prio ? "g lớn nhất  (push chèn theo g)" : "TAIL  (enqueue)", bx + bw - 4, qy + 8, { s: 12, b: 1, c: COL.orange, a: "right" });
     }
     ctx.save(); ctx.beginPath(); ctx.rect(bx + 2, by - 4, bw - 4, bh + 8); ctx.clip();
     const nodes = this.rec.nodes;
     for (const [e, a] of [...this.animQ].sort((u, v) => u[1][4] - v[1][4])) {
       const r = this.view.drawCard(nodes[e].state, a[0], a[1], cw, ch, a[2], a[3]);
-      if (!a[4]) strokeRR(r.x - 1, r.y - 1, r.w + 2, r.h + 2, 8, css(e === ev.match ? COL.red : COL.blue), e === ev.match ? 3 : 2);
+      if (!a[4]) { strokeRR(r.x - 1, r.y - 1, r.w + 2, r.h + 2, 8, css(e === ev.match ? COL.red : COL.blue), e === ev.match ? 3 : 2); this.costBadge(r, nodes[e].cost, a[3]); }
     }
     if (ev.kind === "scan" && ev.frontier.length) {
       const fr = ev.frontier, lim = ev.scanMatch !== null && fr.includes(ev.scanMatch) ? fr.indexOf(ev.scanMatch) : fr.length - 1;

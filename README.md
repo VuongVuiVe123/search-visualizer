@@ -1,6 +1,6 @@
 # Search Visualizer
 
-Trực quan hóa thuật toán tìm kiếm (BFS, DFS) trên hai bài toán: **8-puzzle** và **robot hút bụi nhiều phòng**.
+Trực quan hóa thuật toán tìm kiếm (BFS, DFS, UCS) trên hai bài toán: **8-puzzle** và **robot hút bụi nhiều phòng**.
 Mỗi dòng code đang chạy sáng lên và hiện đúng thứ nó làm trên hình (frontier, explored, bảng node).
 
 Thuật toán viết gọn trong `core/` (`Node`, `child_node`, `solution`, `Stack`/`push`/`pop`, `Problem`, `DFS(problem)`);
@@ -10,17 +10,19 @@ giao diện chạy **chính hàm đó** và ghi lại từng dòng, không có b
 
 ```
 core/                    ① THUẬT TOÁN (không có giao diện)
-  node.py                Node, child_node, solution
-  problem.py             Problem, is_goal
+  node.py                Node (có path_cost = chi phí g), child_node, solution
+  problem.py             Problem (có step_cost), is_goal
   data_structures.py     Stack / push / pop (DFS), Queue / enqueue / dequeue (BFS), is_empty
+  priority_queue.py      PriorityQueue / push / pop theo chi phí g (UCS)
   algorithms/
     dfs.py               def DFS(problem)
     bfs.py               def BFS(problem)
+    ucs.py               def UCS(problem), find_in_frontier
     __init__.py          ALGORITHMS = danh sách thuật toán
 
 problems/                ② BÀI TOÁN
-  puzzle8.py             trạng thái đầu / đích / bài mẫu, find_blank, actions_8puzzle, result_8puzzle
-  vacuum.py              trạng thái đầu / đích / bài mẫu, actions_vacuum, result_vacuum, chi_so_phong
+  puzzle8.py             trạng thái đầu / đích / bài mẫu, find_blank, actions_8puzzle, result_8puzzle, step_cost_8puzzle
+  vacuum.py              trạng thái đầu / đích / bài mẫu, actions_vacuum, result_vacuum, chi_so_phong, step_cost_vacuum
   __init__.py            PROBLEMS = danh sách bài toán
 
 tracing/                 ③ CẦU NỐI thuật toán ↔ giao diện (không chứa thuật toán)
@@ -47,16 +49,20 @@ Quy tắc: tầng sau chỉ được dùng tầng trước. `core/` không biế
 
 | Cần tìm | Mở tệp | Tìm tên |
 |---|---|---|
-| Hàm DFS / BFS | `core/algorithms/dfs.py`, `bfs.py` | `def DFS`, `def BFS` |
+| Hàm DFS / BFS / UCS | `core/algorithms/dfs.py`, `bfs.py`, `ucs.py` | `def DFS`, `def BFS`, `def UCS` |
 | Lớp Node, sinh nút con, lần ngược lời giải | `core/node.py` | `Node`, `child_node`, `solution` |
 | Ngăn xếp / hàng đợi | `core/data_structures.py` | `Stack`, `push`, `pop`, `Queue`, `enqueue`, `dequeue` |
+| Hàng đợi ưu tiên (UCS) | `core/priority_queue.py` | `PriorityQueue`, `push`, `pop` |
+| Chi phí g của một nút | `core/node.py` | `path_cost` trong `Node`, cách tính trong `child_node` |
 | Lớp Problem, kiểm tra đích | `core/problem.py` | `Problem`, `is_goal` |
 | **Trạng thái đầu / đích của 8-puzzle** | `problems/puzzle8.py` | `INITIAL_STATE`, `GOAL_STATE` |
 | Các bài mẫu 8-puzzle (nút "Bài mẫu") | `problems/puzzle8.py` | `PRESETS` |
 | Hành động / kết quả hành động 8-puzzle | `problems/puzzle8.py` | `find_blank`, `actions_8puzzle`, `result_8puzzle` |
+| Chi phí mỗi bước 8-puzzle (Lên/Xuống 1, Trái/Phải 2) | `problems/puzzle8.py` | `step_cost_8puzzle` |
 | Kiểm tra 8-puzzle giải được không | `problems/puzzle8.py` | `solvable` |
 | **Trạng thái đầu / đích robot hút bụi** | `problems/vacuum.py` | `INITIAL_STATE`, `GOAL_STATE` |
 | Hành động / kết quả robot hút bụi | `problems/vacuum.py` | `actions_vacuum`, `result_vacuum`, `chi_so_phong` |
+| Chi phí mỗi bước robot (hút 1, trái/phải 2) | `problems/vacuum.py` | `step_cost_vacuum` |
 | Tạo `Problem(...)` cho từng bài | `problems/<bài>.py` | `make_problem` |
 | Lời giải thích hiện dưới khung code | `tracing/narration.py` | `caption` |
 | Tên, màu, giới hạn số nút của thuật toán | `tracing/algorithm_info.py` | `ALGORITHM_INFO` |
@@ -71,7 +77,10 @@ Không cần giao diện:
 ```
 python run_console.py                # DFS, robot hút bụi
 python run_console.py bfs puzzle8    # BFS, 8-puzzle
+python run_console.py ucs puzzle8    # UCS, 8-puzzle (in thêm chi phí g)
 ```
+
+Phím tắt trong app: B / D / U chọn BFS / DFS / UCS.
 
 Bản web: chạy máy chủ ở thư mục gốc (không mở trực tiếp tệp), rồi mở <http://localhost:8000>:
 
@@ -86,7 +95,7 @@ python desktop/8puzzle_pygame.py
 python desktop/vacuum_pygame.py
 ```
 
-## Thêm thuật toán mới (vd. UCS, IDS)
+## Thêm thuật toán mới (vd. IDS, A*)
 
 1. Tạo `core/algorithms/<ten>.py` có hàm `<TEN>(problem)` viết cùng kiểu với `dfs.py`, thêm vào `ALGORITHMS`
    trong `core/algorithms/__init__.py` và vào `web/manifest.json`.
@@ -98,7 +107,7 @@ Giao diện web tự có thêm thẻ chọn thuật toán, áp dụng cho mọi 
 ## Thêm bài toán mới
 
 1. Tạo `problems/<ten>.py` theo bố cục của `vacuum.py` (`INITIAL_STATE`, `GOAL_STATE`, `PRESETS`, `DEFAULT_PRESET`,
-   `actions_<ten>`, `result_<ten>`, `make_problem`, `solvable`, `random_goal`, `scramble`, `describe_action`),
+   `actions_<ten>`, `result_<ten>`, `step_cost_<ten>`, `make_problem`, `solvable`, `random_goal`, `scramble`, `describe_action`),
    thêm vào `PROBLEMS` trong `problems/__init__.py` và vào `web/manifest.json`.
 2. Tạo `web/<ten>/` gồm `index.html` và `view.js` (xem `web/puzzle8/view.js` làm mẫu), rồi thêm một thẻ ở `index.html` gốc.
 

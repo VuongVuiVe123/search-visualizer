@@ -19,6 +19,7 @@ def algos_json(_arg=""):
         out[key] = {
             "name": info["name"], "full": info["full"], "l1": info["l1"], "l2": info["l2"],
             "color": list(info["color"]), "limit": info["limit"], "frontier": info["frontier"],
+            "cost": info["cost"], "gates": list(info["gates"]),
             "code": algorithm_code(key)[0], "takeLine": take_line(key),
         }
     return json.dumps(out, ensure_ascii=False)
@@ -44,10 +45,11 @@ def record_json(arg):
         ch = e["child"]
         events.append({
             "line": e["line"], "cap": e["cap"], "dur": e["dur"], "kind": e["kind"], "act": e["act"],
-            "child": None if ch is None else {"state": ch[0], "parent": ch[1], "key": ch[2]},
+            "child": None if ch is None else {"state": ch[0], "parent": ch[1], "key": ch[2], "cost": ch[3]},
             "childEid": e["child_eid"], "frontier": e["frontier"], "explored": e["explored"], "tn": e["tn"],
             "gate": e["gate"], "verdict": e["verdict"], "match": e["match"], "scanMatch": e["scan_match"],
             "nodeState": e["node_state"], "nodeEid": e["node_eid"], "nodeDepth": e["node_depth"],
+            "nodeCost": e["node_cost"],
             "path": e["path"],
         })
     return json.dumps({

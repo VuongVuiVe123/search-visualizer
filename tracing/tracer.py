@@ -16,7 +16,8 @@ from problems import PROBLEMS
 from tracing import narration
 from tracing.algorithm_info import ALGORITHM_INFO
 
-KIND = {"return_root": "done", "return_child": "done", "return_none": "done", "scan": "scan", "check": "check"}
+KIND = {"return_root": "done", "return_child": "done", "return_none": "done", "return_take": "done",
+        "scan": "scan", "find_old": "scan", "check": "check", "check_old": "check"}
 SCAN_ROLES = ("scan", "compare", "flag_true")
 
 
@@ -29,14 +30,30 @@ def algorithm_code(algo_key):
 def take_line(algo_key):
     """Chỉ số dòng lấy nút ra khỏi frontier (pop / dequeue): nút "Node kế" trên giao diện nhảy tới dòng này."""
     code, _ = algorithm_code(algo_key)
-    return [narration.role_of(ln) for ln in code].index("take")
+    return code_roles(code).index("take")
+
+
+def code_roles(code):
+    """Vai trò của từng dòng code. Dòng kiểm tra đích / trả lời giải nằm SAU dòng lấy nút ra (UCS)
+    thì đổi thành goal_take / return_take để phân biệt với kiểm tra nút gốc (BFS, DFS)."""
+    roles, seen_take = [], False
+    for ln in code:
+        r = narration.role_of(ln)
+        if r == "take":
+            seen_take = True
+        elif seen_take and r == "goal_root":
+            r = "goal_take"
+        elif seen_take and r == "return_root":
+            r = "return_take"
+        roles.append(r)
+    return roles
 
 
 class Recording:
     """Ghi lại một lần chạy thuật toán.
 
     events    danh sách sự kiện, mỗi sự kiện ứng với một dòng code vừa chạy
-    nodes     bảng các nút đã sinh và được giữ lại: state, parent (chỉ số nút cha), action, depth
+    nodes     bảng các nút đã sinh và được giữ lại: state, parent (chỉ số nút cha), action, depth, cost (chi phí g)
     path      chỉ số các nút trên đường đi lời giải (từ gốc tới đích)
     solution  danh sách hành động của lời giải
     """
@@ -46,7 +63,7 @@ class Recording:
         self.algorithm = ALGORITHMS[algo_key]
         self.info = ALGORITHM_INFO[algo_key]
         self.code, self.first_line = algorithm_code(algo_key)
-        self.roles = [narration.role_of(ln) for ln in self.code]
+        self.roles = code_roles(self.code)
         self.line_of = {}
         for i, r in enumerate(self.roles):
             self.line_of.setdefault(r, i)
@@ -75,7 +92,8 @@ class Recording:
     def add_node(self, node):
         parent = None if node.parent is None else self._eid[id(node.parent)]
         depth = 0 if parent is None else self.nodes[parent]["depth"] + 1
-        self.nodes.append(dict(state=node.state, parent=parent, action=node.action, depth=depth))
+        self.nodes.append(dict(state=node.state, parent=parent, action=node.action, depth=depth,
+                               cost=getattr(node, "path_cost", 0)))
         eid = len(self.nodes) - 1
         self._eid[id(node)] = eid
         self._keep.append(node)
@@ -92,16 +110,19 @@ class Recording:
     def emit(self, idx, role, extra):
         line = self.code[idx]
         m = re.search(r"(\w+)\(", line)
+        node_cost = 0 if self.node_eid is None else self.nodes[self.node_eid]["cost"]
         c = dict(line=line, call=m.group(1) if m else "", frontier_kind=self.info["frontier"],
                  optimal=self.info["optimal"], algo_name=self.info["name"], frontier_len=len(self.frontier),
-                 action=self.act, solution=self.solution, is_goal=False, in_explored=False, in_frontier=False)
+                 action=self.act, solution=self.solution, is_goal=False, in_explored=False, in_frontier=False,
+                 node_cost=node_cost, child_cost=None if self.child is None else self.child[3], old_cost=None)
         c.update(extra)
         self.events.append(dict(
             line=idx, cap=narration.caption(role, c), dur=narration.duration(role, c), kind=KIND.get(role, "n"),
             act=self.act, child=self.child, child_eid=self.child_eid,
             frontier=tuple(self.frontier), explored=tuple(self.explored), tn=len(self.nodes),
             gate=tuple(self.gate), verdict=self.verdict, match=self.match, scan_match=self.scan_match,
-            node_state=self.node_state, node_eid=self.node_eid, node_depth=self.node_depth, path=self.path))
+            node_state=self.node_state, node_eid=self.node_eid, node_depth=self.node_depth,
+            node_cost=node_cost, path=self.path))
 
     # ---------------- chạy thuật toán dưới sys.settrace ----------------
 
@@ -191,7 +212,7 @@ class Recording:
             self.emit(idx, role, {})
         elif role == "make_child":
             self.ckey += 1
-            self.child = (L["child"].state, self._eid[id(L["node"])], self.ckey)
+            self.child = (L["child"].state, self._eid[id(L["node"])], self.ckey, L["child"].path_cost)
             pmod = PROBLEMS[self.problem_id]
             self.emit(idx, role, {"describe": pmod.describe_action(L["action"])})
         elif role == "flag_false":
@@ -219,5 +240,35 @@ class Recording:
         elif role == "return_none":
             self.reset_view()
             self.emit(idx, role, {})
+        # ----- các dòng riêng của UCS (hàng đợi ưu tiên theo chi phí g) -----
+        elif role == "goal_take":
+            goal = is_goal(self.problem, L["node"].state)
+            if goal:
+                self.verdict = "goal"
+            self.emit(idx, role, {"is_goal": goal})
+            if goal:
+                self.path, self.solution = self.chain(self._eid[id(L["node"])])
+        elif role == "find_old":
+            old = L["old"]
+            self.scan_match = self.match = None if old is None else self._eid[id(old)]
+            self.gate[1] = old is not None
+            self.emit(idx, role, {"old_cost": None if old is None else old.path_cost})
+        elif role == "check_old":
+            old = L["old"]
+            in_explored = L["child"].state in L["explored"]
+            self.gate[0] = in_explored
+            if in_explored:
+                self.verdict = "dup"
+            elif old is None:
+                self.verdict = "ok"
+            self.emit(idx, role, {"in_explored": in_explored, "old_cost": None if old is None else old.path_cost})
+        elif role == "better":
+            old = L["old"]
+            better = old is not None and old.path_cost > L["child"].path_cost
+            self.verdict = "replace" if better else "dup"
+            self.emit(idx, role, {"old_cost": None if old is None else old.path_cost})
+        elif role == "replace":
+            self._sync_frontier(L)
+            self.emit(idx, role, {"old_cost": L["old"].path_cost})
         else:
             self.emit(idx, role, {})
