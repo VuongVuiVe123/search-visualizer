@@ -81,7 +81,7 @@ const View = {
   get goal() { return this.problem.goal.slice(); },
   presets(algo) { const ps = this.problem.presets; return ps[algo] || ps[Object.keys(ps)[0]]; },
   randomPuzzle(E) { return PY.random("puzzle8", E.algo, this.goal); },
-  subtitle() { return "8-puzzle · mỗi dòng code chạy, hình tương ứng sáng lên"; },
+  subtitle() { return "8-puzzle · từng dòng code sáng lên trên hình"; },
   anchors() { return { child: [this.childBoard.cx, this.childBoard.cy], node: [this.nodeBoard.cx, this.nodeBoard.cy] }; },
   drawCard(state, cx, cy, w, h, sc, al) { return drawCached("p8:" + sk(state), w, h, (g, pw, ph) => drawMiniBoard(g, pw, ph, state), cx, cy, sc, al); },
   extraButtons() { return [{ w: 140, label: this.replay ? "Dừng" : "Chạy lời giải", key: "replay", active: !!this.replay }]; },
@@ -138,7 +138,7 @@ const View = {
     const r = { x: 1032, y: 92, w: 356, h: 540 }, nb = this.nodeBoard, cb = this.childBoard, vb = ev.verdict;
     panel(r, "nút đang xét", COL.orange);
     T("node", nb.x - 2, nb.y - 20, { s: 15, b: 1, c: COL.orange });
-    T(`độ sâu ${ev.nodeDepth}`, nb.x + nb.size + 2, nb.y - 19, { s: 14, c: COL.muted, a: "right" });
+    T(E.hasCost ? `g = ${ev.nodeCost}` : `độ sâu ${ev.nodeDepth}`, nb.x + nb.size + 2, nb.y - 19, { s: 14, c: E.hasCost ? COL.gold : COL.muted, a: "right" });
     nb.draw(COL.orange);
     if (ev.act) {
       const cx = r.x + r.w / 2, y = nb.y + nb.size + 12;
@@ -146,8 +146,9 @@ const View = {
       const g = { "Lên": "↑", "Xuống": "↓", "Trái": "←", "Phải": "→" }[ev.act];
       T(`${g}  ${ev.act}`, cx, y + 15, { s: 18, b: 1, c: E.acc, a: "center", v: "middle" });
     }
-    const border = { null: COL.cyan, ok: COL.green, dup: COL.red, goal: COL.gold, queued: COL.green }[vb];
+    const border = { null: COL.cyan, ok: COL.green, dup: COL.red, goal: COL.gold, queued: COL.green, replace: COL.gold }[vb];
     T("child", cb.x - 2, cb.y - 20, { s: 15, b: 1, c: border });
+    if (E.hasCost && ev.child) T(`g = ${ev.child.cost}`, cb.x + cb.size + 2, cb.y - 19, { s: 14, c: COL.gold, a: "right" });
     cb.draw(border, cb.alpha);
     if (vb === "dup" && ev.child) { ctx.fillStyle = `rgba(255,98,112,${0.27 * (0.5 + 0.5 * Math.sin(p * 12))})`; ctx.fillRect(cb.x, cb.y, cb.size, cb.size); }
     E.drawVerdict(r, cb.y + cb.size + 12, ev);

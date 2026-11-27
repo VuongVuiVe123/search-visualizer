@@ -435,15 +435,16 @@ const View = {
   drawInfo(ev, p, E) {
     const r = INFO, nc = this.nodeCard, cc = this.childCard, vb = ev.verdict;
     panel(r, "nút đang xét", COL.orange);
-    T(`độ sâu ${ev.nodeDepth}`, r.x + r.w - 14, r.y + 12, { s: 12, c: COL.muted, a: "right" });
+    T(E.hasCost ? `g = ${ev.nodeCost}` : `độ sâu ${ev.nodeDepth}`, r.x + r.w - 14, r.y + 12, { s: 12, c: E.hasCost ? COL.gold : COL.muted, a: "right" });
     nc.draw("node", COL.orange, ev.nodeState);
     if (ev.act) {
       const y = nc.rect.y + nc.rect.h + 6, cx = r.x + r.w / 2;
       fillRR(cx - 80, y, 160, 22, 11, css(shade(E.acc, 0.3))); strokeRR(cx - 80, y, 160, 22, 11, css(E.acc), 2);
       T({ Suck: "↓ Suck (hút bụi)", Left: "← Left", Right: "Right →" }[ev.act], cx, y + 11, { s: 14, b: 1, c: E.acc, a: "center", v: "middle" });
     }
-    const border = { null: COL.cyan, ok: COL.green, dup: COL.red, goal: COL.gold, queued: COL.green }[vb];
+    const border = { null: COL.cyan, ok: COL.green, dup: COL.red, goal: COL.gold, queued: COL.green, replace: COL.gold }[vb];
     cc.draw("child", border, ev.child ? ev.child.state : (this.lastChild || ev.nodeState));
+    if (E.hasCost && ev.child) T(`g = ${ev.child.cost}`, cc.rect.x + cc.rect.w - 10, cc.rect.y + 4, { s: 12, b: 1, c: COL.gold, a: "right" });
     if (vb === "dup" && ev.child) { ctx.fillStyle = `rgba(255,98,112,${0.27 * (0.5 + 0.5 * Math.sin(p * 12))})`; ctx.fillRect(cc.rect.x, cc.rect.y, cc.rect.w, cc.rect.h); }
     E.drawVerdict(r, cc.rect.y + cc.rect.h + 8, ev, { rowH: 22, lampR: 6, fs: 11, bw: 240, bh: 28, bdy: 48 });
   },

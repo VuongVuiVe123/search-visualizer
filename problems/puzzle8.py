@@ -37,6 +37,11 @@ PRESETS = {
         ("292 bước", ((2, 3, 0), (1, 4, 6), (7, 5, 8))),
         ("320 bước", INITIAL_STATE),
     ],
+    "ucs": [                                    # đặt tên theo tổng chi phí g của lời giải rẻ nhất
+        ("chi phí 3", INITIAL_STATE),
+        ("chi phí 5", ((1, 5, 2), (4, 0, 3), (7, 8, 6))),
+        ("chi phí 8", ((0, 2, 3), (1, 8, 5), (4, 7, 6))),
+    ],
 }
 DEFAULT_PRESET = 1   # bài mẫu được mở sẵn khi vào trang (đếm từ 0)
 
@@ -93,17 +98,27 @@ def result_8puzzle(state, action):
 
 
 # =====================================================================
-# 4. TẠO PROBLEM: Problem(initial, goal, actions_8puzzle, result_8puzzle)
+# 4. CHI PHÍ MỖI BƯỚC (UCS dùng): ô trống đi Lên / Xuống tốn 1, đi Trái / Phải tốn 2
+# =====================================================================
+
+def step_cost_8puzzle(state, action):
+    if action == "Lên" or action == "Xuống":
+        return 1
+    return 2
+
+
+# =====================================================================
+# 5. TẠO PROBLEM: Problem(initial, goal, actions_8puzzle, result_8puzzle, step_cost_8puzzle)
 # =====================================================================
 
 def make_problem(initial_state=INITIAL_STATE, goal_state=GOAL_STATE):
     initial_state = tuple(tuple(row) for row in initial_state)
     goal_state = tuple(tuple(row) for row in goal_state)
-    return Problem(initial_state, goal_state, actions_8puzzle, result_8puzzle)
+    return Problem(initial_state, goal_state, actions_8puzzle, result_8puzzle, step_cost_8puzzle)
 
 
 # =====================================================================
-# 5. TIỆN ÍCH CHO GIAO DIỆN (không thuộc thuật toán)
+# 6. TIỆN ÍCH CHO GIAO DIỆN (không thuộc thuật toán)
 # =====================================================================
 
 def _inversions(state):

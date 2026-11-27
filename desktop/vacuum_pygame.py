@@ -665,7 +665,7 @@ class App:
         self.toast = ("", 0.0)
         self.scene = Scene()
         self.acc = list(ALGO_COL["bfs"])
-        self.algo_rects = {"bfs": pygame.Rect(464, 16, 214, 52), "dfs": pygame.Rect(686, 16, 214, 52)}
+        self.layout_switch(464)
         self.sw_x = float(self.algo_rects["bfs"].x)
         self.node_card = BigCard((INFO.x + 12, INFO.y + 28, INFO.w - 24, 64))
         self.child_card = BigCard((INFO.x + 12, INFO.y + 130, INFO.w - 24, 64))
@@ -708,7 +708,7 @@ class App:
 
     def build_code(self):
         self.lines = []
-        f = font("consolas", 13)
+        f = self.code_font(13, CODE_R.w - 56)
         for line in CODE_BY[self.algo]:
             lead = len(line) - len(line.lstrip())
             line = " " * (lead // 2) + line.lstrip()
@@ -734,6 +734,42 @@ class App:
     @property
     def presets(self):
         return PRESETS
+
+    # ---------- dùng chung cho mọi thuật toán (BFS, DFS, UCS, ...) ----------
+    def layout_switch(self, x0_wide):
+        """Công tắc chọn thuật toán: 2 thẻ thì rộng, từ 3 thẻ trở lên thì thu gọn chữ."""
+        keys = list(ALGORITHM_INFO)
+        n, wide = len(keys), len(keys) <= 2
+        x0, total = (x0_wide, 436) if wide else (x0_wide - 42, 478)
+        cw = (total - (n - 1) * 8) // n
+        self.algo_rects = {k: pygame.Rect(x0 + i * (cw + 8), 16, cw, 52) for i, k in enumerate(keys)}
+        self.sw_style = dict(x0=x0, total=total, name_x=18 if wide else 12, name_s=26 if wide else 22,
+                             lx=90 if wide else 64, l2_s=12 if wide else 11)
+
+    def info(self):
+        return ALGORITHM_INFO[self.algo]
+
+    def code_font(self, size, avail):
+        """Cỡ chữ khung code: thu nhỏ dần (tối thiểu 10) nếu dòng dài nhất không vừa khung."""
+        shown = [" " * ((len(ln) - len(ln.lstrip())) // 2) + ln.lstrip() for ln in CODE_BY[self.algo]]
+        while size > 10 and max(tw(font("consolas", size), ln) for ln in shown) > avail:
+            size -= 1
+        return font("consolas", size)
+
+    def cost_badge(self, s, r, g):
+        """Huy hiệu nhỏ ghi chi phí g ở góc trên bên phải một thẻ (chỉ với thuật toán có chi phí, vd. UCS)."""
+        if not self.info()["cost"] or g is None:
+            return
+        f = font("segoeui", 11, True)
+        w = max(17, tw(f, str(g)) + 9)
+        box = pygame.Rect(round(r.right - w + 5), round(r.y - 7), round(w), 15)
+        G.rect(s, tuple(int(v) for v in self.acc), box, border_radius=7)
+        text(s, str(g), f, (16, 14, 30), box.center, "center")
+
+    def queued_msg(self):
+        kind = self.info()["frontier"]
+        return {"stack": "Vào ngăn xếp", "priority": "Vào hàng đợi ưu tiên"}.get(kind, "Vào hàng đợi")
+
 
     def load_preset(self, i):
         lab, init, goal = PRESETS[i]
@@ -815,7 +851,7 @@ class App:
             self.speed_i = max(0, self.speed_i - 1)
         elif key == "fast":
             self.speed_i = min(len(SPEEDS) - 1, self.speed_i + 1)
-        elif key in ("alg_bfs", "alg_dfs"):
+        elif key.startswith("alg_") and key[4:] in ALGORITHM_INFO:
             self.set_algo(key[4:])
         elif key.startswith("p") and key[1:].isdigit():
             self.load_preset(int(key[1:]))
@@ -1141,7 +1177,8 @@ class App:
         text(s, ALGO_INFO[self.algo][3], font("segoeui", 28, True), acc, (16, 10))
         text(s, f"Robot hút bụi · {self.n} phòng", font("segoeui", 15), MUTED, (18, 50))
         chips = [("Đã mở", len(ev["explored"]), ORANGE), ("Frontier", len(ev["frontier"]), BLUE),
-                 ("Nút sinh ra", ev["tn"], CYAN), ("Độ sâu", ev["node_depth"], GOLD)]
+                 ("Nút sinh ra", ev["tn"], CYAN),
+                 ("Chi phí g", ev["node_cost"], GOLD) if self.info()["cost"] else ("Độ sâu", ev["node_depth"], GOLD)]
         x = W - 16
         for name, val, col in reversed(chips):
             f1, f2 = font("segoeui", 13), font("segoeui", 22, True)
@@ -1154,19 +1191,20 @@ class App:
             x = r.x - 8
         text(s, "Đích", font("segoeui", 14, True), GREEN, (x - 8, 30), "midright")
         text(s, f"robot ở {self.goal[0]}, sạch hết", font("segoeui", 13), TEXT, (x - 8, 50), "midright")
-        cont = pygame.Rect(458, 10, 448, 64)
+        st = self.sw_style
+        cont = pygame.Rect(st["x0"] - 6, 10, st["total"] + 12, 64)
         G.rect(s, (16, 21, 34), cont, border_radius=18)
         G.rect(s, PANEL_L, cont, 1, border_radius=18)
-        pill = pygame.Rect(round(self.sw_x), 16, 214, 52)
+        pill = pygame.Rect(round(self.sw_x), 16, self.algo_rects[self.algo].w, 52)
         G.rect(s, shade(acc, 0.35), pill.inflate(8, 8), border_radius=18)
         G.rect(s, acc, pill, border_radius=14)
         for key, r in self.algo_rects.items():
             name, l1, l2, _ = ALGO_INFO[key]
             on = key == self.algo
             col = (10, 22, 30) if on else (TEXT if r.collidepoint(self.mouse) else MUTED)
-            text(s, name, font("segoeui", 26, True), col, (r.x + 18, r.centery), "midleft")
-            text(s, l1, font("segoeui", 13, True), col, (r.x + 90, r.centery - 9), "midleft")
-            text(s, l2, font("segoeui", 12), col, (r.x + 90, r.centery + 9), "midleft")
+            text(s, name, font("segoeui", st["name_s"], True), col, (r.x + st["name_x"], r.centery), "midleft")
+            text(s, l1, font("segoeui", 13, True), col, (r.x + st["lx"], r.centery - 9), "midleft")
+            text(s, l2, font("segoeui", st["l2_s"]), col, (r.x + st["lx"], r.centery + 9), "midleft")
 
     def draw_scene(self, s, ev, p):
         sc = self.scene
@@ -1266,7 +1304,10 @@ class App:
         nc, cc = self.node_card, self.child_card
         vb = ev["verdict"]
         nstate = ev["node_state"]
-        text(s, f"độ sâu {ev['node_depth']}", font("segoeui", 12), MUTED, (r.right - 14, r.y + 12), "topright")
+        if self.info()["cost"]:
+            text(s, f"g = {ev['node_cost']}", font("segoeui", 12), GOLD, (r.right - 14, r.y + 12), "topright")
+        else:
+            text(s, f"độ sâu {ev['node_depth']}", font("segoeui", 12), MUTED, (r.right - 14, r.y + 12), "topright")
         nc.draw(s, "node", ORANGE, nstate)
         ay = nc.rect.bottom + 6
         if ev["act"]:
@@ -1276,15 +1317,17 @@ class App:
             G.rect(s, ACC_NOW, chip, 2, border_radius=11)
             text(s, {"Suck": "↓ Suck (hút bụi)", "Left": "← Left", "Right": "Right →"}[ev["act"]], font("segoeui", 14, True),
                  ACC_NOW, chip.center, "center")
-        border = {None: CYAN, "ok": GREEN, "dup": RED, "goal": GOLD, "queued": GREEN}[vb]
+        border = {None: CYAN, "ok": GREEN, "dup": RED, "goal": GOLD, "queued": GREEN, "replace": GOLD}[vb]
         cstate = ev["child"][0] if ev["child"] else self.child_card_state()
         cc.draw(s, "child", border, cstate)
+        if self.info()["cost"] and ev["child"]:
+            text(s, f"g = {ev['child'][3]}", font("segoeui", 12, True), GOLD, (cc.rect.right - 10, cc.rect.y + 4), "topright")
         if vb == "dup" and ev["child"]:
             flash = pygame.Surface((round(cc.rect.w * SC), round(cc.rect.h * SC)), pygame.SRCALPHA)
             flash.fill((255, 98, 112, int(70 * (0.5 + 0.5 * math.sin(p * 12)))))
             s.blit(flash, (round(cc.rect.x * SC), round(cc.rect.y * SC)))
         gy = cc.rect.bottom + 8
-        for k, label in enumerate(("child in explored ?", "in_frontier ?")):
+        for k, label in enumerate(self.info()["gates"]):
             y = gy + k * 22
             col = tuple(int(v) for v in self.lamps[k])
             G.circle(s, shade(col, 0.4), (r.x + 26, y + 10), 9)
@@ -1293,9 +1336,9 @@ class App:
             g = ev["gate"][k]
             text(s, "?" if g is None else ("CÓ" if g else "KHÔNG"), font("segoeui", 13, True), col, (r.right - 16, y + 2), "topright")
         msg = {None: "", "ok": "Nút mới → xét tiếp", "dup": "Trùng → BỎ", "goal": "ĐÍCH!",
-               "queued": "Vào ngăn xếp" if self.algo == "dfs" else "Vào hàng đợi"}[vb]
+               "queued": self.queued_msg(), "replace": "Rẻ hơn → thay nút cũ"}[vb]
         if vb:
-            col = {"ok": GREEN, "dup": RED, "goal": GOLD, "queued": GREEN}[vb]
+            col = {"ok": GREEN, "dup": RED, "goal": GOLD, "queued": GREEN, "replace": GOLD}[vb]
             ease = 1 - (1 - min(1.0, self.banner_age / 0.3)) ** 3
             b = pygame.Rect(0, 0, int(240 * (0.6 + 0.4 * ease)), 28)
             b.midtop = (r.centerx, gy + 48)
@@ -1365,6 +1408,7 @@ class App:
             if eid == ev["match"]:
                 col = RED
             G.rect(s, col, r.inflate(2, 2), bw, border_radius=8)
+            self.cost_badge(s, r, nodes[eid].get("cost"))
         ne = ev["node_eid"]
         if ne is not None and ne in self.anim_tab and nodes[ne]["parent"] in self.anim_tab:
             a, b = self.anim_tab[ne], self.anim_tab[nodes[ne]["parent"]]
@@ -1392,7 +1436,8 @@ class App:
         G.rect(s, shade(acc, 0.6), rect, 2, border_radius=14)
         dfs = self.algo == "dfs"
         text(s, "FRONTIER", font("segoeui", 15, True), acc, (26, Q_Y + 18))
-        text(s, "ngăn xếp LIFO" if dfs else "hàng đợi FIFO", font("segoeui", 13), MUTED, (26, Q_Y + 40))
+        prio = self.info()["frontier"] == "priority"
+        text(s, "ngăn xếp LIFO" if dfs else ("ưu tiên theo g" if prio else "hàng đợi FIFO"), font("segoeui", 13), MUTED, (26, Q_Y + 40))
         text(s, f"{len(ev['frontier'])} nút", font("segoeui", 13), MUTED, (26, Q_Y + 62))
         belt = pygame.Rect(QX - 8, Q_Y + 28, self.qmax * self.qp + 2, 64)
         G.rect(s, (14, 20, 34), belt, border_radius=10)
@@ -1405,8 +1450,8 @@ class App:
             text(s, "ĐÁY" + (f"  (+{hidden} nút ẩn)" if hidden else ""), font("segoeui", 12, True), MUTED, (belt.x + 4, Q_Y + 8))
             text(s, "ĐỈNH  (push / pop)", font("segoeui", 12, True), GREEN, (belt.right - 4, Q_Y + 8), "topright")
         else:
-            text(s, "HEAD  (dequeue)", font("segoeui", 12, True), GREEN, (belt.x + 4, Q_Y + 8))
-            text(s, "TAIL  (enqueue)", font("segoeui", 12, True), ORANGE, (belt.right - 4, Q_Y + 8), "topright")
+            text(s, "ĐẦU: g nhỏ nhất  (pop)" if prio else "HEAD  (dequeue)", font("segoeui", 12, True), GREEN, (belt.x + 4, Q_Y + 8))
+            text(s, "g lớn nhất  (push chèn theo g)" if prio else "TAIL  (enqueue)", font("segoeui", 12, True), ORANGE, (belt.right - 4, Q_Y + 8), "topright")
         clip = s.get_clip()
         setclip(s, belt.inflate(-4, 8))
         nodes = self.rec.nodes
@@ -1415,6 +1460,7 @@ class App:
             r = blit_state(s, nodes[eid]["state"], x, y, self.card_w, self.card_h, sc, al)
             if not gone:
                 G.rect(s, RED if eid == match else BLUE, r.inflate(2, 2), 3 if eid == match else 2, border_radius=8)
+                self.cost_badge(s, r, nodes[eid].get("cost"))
         if ev["kind"] == "scan" and ev["frontier"]:
             fr = ev["frontier"]
             lim = fr.index(ev["scan_match"]) if ev["scan_match"] in fr else len(fr) - 1
@@ -1492,6 +1538,7 @@ class App:
                     elif k == pygame.K_v: self.press("replay")
                     elif k == pygame.K_b: self.press("alg_bfs")
                     elif k == pygame.K_d: self.press("alg_dfs")
+                    elif k == pygame.K_u: self.press("alg_ucs")
                     elif k == pygame.K_F11:
                         self.fullscreen = not self.fullscreen
                         if self.fullscreen:

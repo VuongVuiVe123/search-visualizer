@@ -49,8 +49,7 @@ from tracing.stats import quick, random_initial  # noqa: E402
 from tracing.tracer import Recording, algorithm_code, take_line  # noqa: E402
 
 GOAL = puzzle8.GOAL_STATE
-PRESETS = puzzle8.PRESETS["bfs"]
-PRESETS_DFS = puzzle8.PRESETS["dfs"]
+PRESETS = puzzle8.PRESETS["bfs"]            # mỗi thuật toán có bộ bài mẫu riêng: puzzle8.PRESETS[<thuật toán>]
 CODE_BY = {k: algorithm_code(k)[0] for k in ALGORITHM_INFO}
 ALGO_COL = {k: v["color"] for k, v in ALGORITHM_INFO.items()}
 ALGO_INFO = {k: (v["name"], v["l1"], v["l2"], v["full"]) for k, v in ALGORITHM_INFO.items()}
@@ -341,7 +340,7 @@ class App:
         self.buttons.append(Button((bx + 112, 846, 128, 40), "Ngẫu nhiên", "rand"))
         self.buttons.append(Button((bx + 248, 846, 140, 40), "Chạy lời giải", "replay"))
         self.replay = None
-        self.algo_rects = {"bfs": pygame.Rect(472, 16, 214, 52), "dfs": pygame.Rect(694, 16, 214, 52)}
+        self.layout_switch(472)
         self.acc = list(ALGO_COL[self.algo])
         self.sw_x = float(self.algo_rects[self.algo].x)
         self.cap_text, self.cap_age = "", 0.0
@@ -362,7 +361,7 @@ class App:
 
     def build_code(self):
         self.lines = []
-        f = font("consolas", 14)
+        f = self.code_font(14, CODE_W - 60)
         for line in CODE_BY[self.algo]:
             lead = len(line) - len(line.lstrip())
             line = " " * (lead // 2) + line.lstrip()
@@ -387,7 +386,43 @@ class App:
 
     @property
     def presets(self):
-        return PRESETS if self.algo == "bfs" else PRESETS_DFS
+        return puzzle8.PRESETS.get(self.algo, PRESETS)
+
+    # ---------- dùng chung cho mọi thuật toán (BFS, DFS, UCS, ...) ----------
+    def layout_switch(self, x0_wide):
+        """Công tắc chọn thuật toán: 2 thẻ thì rộng, từ 3 thẻ trở lên thì thu gọn chữ."""
+        keys = list(ALGORITHM_INFO)
+        n, wide = len(keys), len(keys) <= 2
+        x0, total = (x0_wide, 436) if wide else (x0_wide - 42, 478)
+        cw = (total - (n - 1) * 8) // n
+        self.algo_rects = {k: pygame.Rect(x0 + i * (cw + 8), 16, cw, 52) for i, k in enumerate(keys)}
+        self.sw_style = dict(x0=x0, total=total, name_x=18 if wide else 12, name_s=26 if wide else 22,
+                             lx=90 if wide else 64, l2_s=12 if wide else 11)
+
+    def info(self):
+        return ALGORITHM_INFO[self.algo]
+
+    def code_font(self, size, avail):
+        """Cỡ chữ khung code: thu nhỏ dần (tối thiểu 10) nếu dòng dài nhất không vừa khung."""
+        shown = [" " * ((len(ln) - len(ln.lstrip())) // 2) + ln.lstrip() for ln in CODE_BY[self.algo]]
+        while size > 10 and max(tw(font("consolas", size), ln) for ln in shown) > avail:
+            size -= 1
+        return font("consolas", size)
+
+    def cost_badge(self, s, r, g):
+        """Huy hiệu nhỏ ghi chi phí g ở góc trên bên phải một thẻ (chỉ với thuật toán có chi phí, vd. UCS)."""
+        if not self.info()["cost"] or g is None:
+            return
+        f = font("segoeui", 11, True)
+        w = max(17, tw(f, str(g)) + 9)
+        box = pygame.Rect(round(r.right - w + 5), round(r.y - 7), round(w), 15)
+        G.rect(s, tuple(int(v) for v in self.acc), box, border_radius=7)
+        text(s, str(g), f, (16, 14, 30), box.center, "center")
+
+    def queued_msg(self):
+        kind = self.info()["frontier"]
+        return {"stack": "Vào ngăn xếp", "priority": "Vào hàng đợi ưu tiên"}.get(kind, "Vào hàng đợi")
+
 
     def load(self, init, goal=GOAL):
         self.replay = None
@@ -445,7 +480,7 @@ class App:
             self.speed_i = max(0, self.speed_i - 1)
         elif key == "fast":
             self.speed_i = min(len(SPEEDS) - 1, self.speed_i + 1)
-        elif key in ("alg_bfs", "alg_dfs"):
+        elif key.startswith("alg_") and key[4:] in ALGORITHM_INFO:
             self.set_algo(key[4:])
         elif key.startswith("p"):
             self.preset = int(key[1:])
@@ -541,7 +576,7 @@ class App:
         elif st[0] == 0:
             self.ed.update(ok=True, col=GREEN, msg="Trạng thái đầu đã bằng đích: 0 bước.")
         else:
-            tail = "" if self.algo == "bfs" else " (không chắc ngắn nhất)"
+            tail = "" if self.info()["optimal"] else " (không chắc ngắn nhất)"
             self.ed.update(ok=True, col=GREEN, msg=f"{nm} tìm được lời giải {st[0]} bước{tail}, mở {st[1]} nút.")
 
     def editor_event(self, e):
@@ -809,10 +844,11 @@ class App:
     def draw_header(self, s, ev):
         acc = tuple(int(v) for v in self.acc)
         text(s, ALGO_INFO[self.algo][3], font("segoeui", 28, True), acc, (16, 10))
-        text(s, "8-puzzle · mỗi dòng code chạy, hình tương ứng sáng lên",
+        text(s, "8-puzzle · từng dòng code sáng lên trên hình",
              font("segoeui", 15), MUTED, (18, 50))
         chips = [("Đã mở", len(ev["explored"]), ORANGE), ("Frontier", len(ev["frontier"]), BLUE),
-                 ("Nút sinh ra", ev["tn"], CYAN), ("Độ sâu", ev["node_depth"], GOLD)]
+                 ("Nút sinh ra", ev["tn"], CYAN),
+                 ("Chi phí g", ev["node_cost"], GOLD) if self.info()["cost"] else ("Độ sâu", ev["node_depth"], GOLD)]
         x = W - 16
         for name, val, col in reversed(chips):
             f1, f2 = font("segoeui", 13), font("segoeui", 22, True)
@@ -828,20 +864,21 @@ class App:
         self.draw_switch(s)
 
     def draw_switch(self, s):
-        cont = pygame.Rect(466, 10, 448, 64)
+        st = self.sw_style
+        cont = pygame.Rect(st["x0"] - 6, 10, st["total"] + 12, 64)
         G.rect(s, (16, 21, 34), cont, border_radius=18)
         G.rect(s, PANEL_L, cont, 1, border_radius=18)
         acc = tuple(int(v) for v in self.acc)
-        pill = pygame.Rect(round(self.sw_x), 16, 214, 52)
+        pill = pygame.Rect(round(self.sw_x), 16, self.algo_rects[self.algo].w, 52)
         G.rect(s, shade(acc, 0.35), pill.inflate(8, 8), border_radius=18)
         G.rect(s, acc, pill, border_radius=14)
         for key, r in self.algo_rects.items():
             name, l1, l2, _ = ALGO_INFO[key]
             on = key == self.algo
             col = (10, 22, 30) if on else (TEXT if r.collidepoint(self.mouse) else MUTED)
-            text(s, name, font("segoeui", 26, True), col, (r.x + 18, r.centery), "midleft")
-            text(s, l1, font("segoeui", 13, True), col, (r.x + 90, r.centery - 9), "midleft")
-            text(s, l2, font("segoeui", 12), col, (r.x + 90, r.centery + 9), "midleft")
+            text(s, name, font("segoeui", st["name_s"], True), col, (r.x + st["name_x"], r.centery), "midleft")
+            text(s, l1, font("segoeui", 13, True), col, (r.x + st["lx"], r.centery - 9), "midleft")
+            text(s, l2, font("segoeui", st["l2_s"]), col, (r.x + st["lx"], r.centery + 9), "midleft")
 
     def draw_code(self, s, ev):
         rect = pygame.Rect(CODE_X, CODE_Y, CODE_W, CODE_H)
@@ -908,6 +945,7 @@ class App:
             if eid == ev["match"]:
                 col = RED
             G.rect(s, col, r.inflate(2, 2), bw, border_radius=8)
+            self.cost_badge(s, r, nodes[eid].get("cost"))
         ne = ev["node_eid"]
         if ne is not None and ne in self.anim_tab and nodes[ne]["parent"] in self.anim_tab:
             a, b = self.anim_tab[ne], self.anim_tab[nodes[ne]["parent"]]
@@ -958,7 +996,10 @@ class App:
         panel(s, RIGHT, "nút đang xét", ORANGE)
         nb, cb = self.node_board, self.child_board
         text(s, "node", font("segoeui", 15, True), ORANGE, (nb.x - 2, nb.y - 20))
-        text(s, f"độ sâu {ev['node_depth']}", font("segoeui", 14), MUTED, (nb.x + nb.size + 2, nb.y - 19), "topright")
+        if self.info()["cost"]:
+            text(s, f"g = {ev['node_cost']}", font("segoeui", 14), GOLD, (nb.x + nb.size + 2, nb.y - 19), "topright")
+        else:
+            text(s, f"độ sâu {ev['node_depth']}", font("segoeui", 14), MUTED, (nb.x + nb.size + 2, nb.y - 19), "topright")
         nb.draw(s, ORANGE if ev["node_eid"] is not None or ev["line"] >= 1 else PANEL_L)
         ay = nb.y + nb.size + 8
         if ev["act"]:
@@ -970,15 +1011,17 @@ class App:
             G.rect(s, CYAN, r, 2, border_radius=15)
             text(s, f"{glyph}  {ev['act']}", font("segoeui", 18, True), CYAN, r.center, "center")
         vb = ev["verdict"]
-        border = {None: CYAN, "ok": GREEN, "dup": RED, "goal": GOLD, "queued": GREEN}[vb]
+        border = {None: CYAN, "ok": GREEN, "dup": RED, "goal": GOLD, "queued": GREEN, "replace": GOLD}[vb]
         text(s, "child", font("segoeui", 15, True), border, (cb.x - 2, cb.y - 20))
+        if self.info()["cost"] and ev["child"]:
+            text(s, f"g = {ev['child'][3]}", font("segoeui", 14), GOLD, (cb.x + cb.size + 2, cb.y - 19), "topright")
         cb.draw(s, border, cb.alpha)
         if vb == "dup" and ev["child"]:
             flash = pygame.Surface((round(cb.size * SC), round(cb.size * SC)), pygame.SRCALPHA)
             flash.fill((255, 98, 112, int(70 * (0.5 + 0.5 * math.sin(p * 12)))))
             s.blit(flash, (round(cb.x * SC), round(cb.y * SC)))
         gy = cb.y + cb.size + 12
-        for k, label in enumerate(("child.state in explored ?", "in_frontier ?")):
+        for k, label in enumerate(self.info()["gates"]):
             y = gy + k * 28
             col = tuple(int(v) for v in self.lamps[k])
             G.circle(s, shade(col, 0.4), (RIGHT.x + 26, y + 11), 11)
@@ -988,9 +1031,9 @@ class App:
             tag = "?" if g is None else ("CÓ" if g else "KHÔNG")
             text(s, tag, font("segoeui", 15, True), col, (RIGHT.right - 18, y + 1), "topright")
         msg = {None: "", "ok": "Nút mới → xét tiếp", "dup": "Trùng → BỎ", "goal": "ĐÍCH!",
-               "queued": "Vào ngăn xếp" if self.algo == "dfs" else "Vào hàng đợi"}[vb]
+               "queued": self.queued_msg(), "replace": "Rẻ hơn → thay nút cũ"}[vb]
         if vb:
-            col = {"ok": GREEN, "dup": RED, "goal": GOLD, "queued": GREEN}[vb]
+            col = {"ok": GREEN, "dup": RED, "goal": GOLD, "queued": GREEN, "replace": GOLD}[vb]
             pop = min(1.0, self.banner_age / 0.3)
             ease = 1 - (1 - pop) ** 3
             r = pygame.Rect(0, 0, int(260 * (0.6 + 0.4 * ease)), 34)
@@ -1006,7 +1049,8 @@ class App:
         G.rect(s, shade(acc, 0.6), rect, 2, border_radius=14)
         dfs = self.algo == "dfs"
         text(s, "FRONTIER", font("segoeui", 15, True), acc, (26, Q_Y + 18))
-        text(s, "ngăn xếp LIFO" if dfs else "hàng đợi FIFO", font("segoeui", 13), MUTED, (26, Q_Y + 40))
+        prio = self.info()["frontier"] == "priority"
+        text(s, "ngăn xếp LIFO" if dfs else ("ưu tiên theo g" if prio else "hàng đợi FIFO"), font("segoeui", 13), MUTED, (26, Q_Y + 40))
         text(s, f"{len(ev['frontier'])} nút", font("segoeui", 13), MUTED, (26, Q_Y + 62))
         belt = pygame.Rect(self.QX - 8, Q_Y + 28, self.QMAX * self.QP + 2, 64)
         G.rect(s, (14, 20, 34), belt, border_radius=10)
@@ -1019,8 +1063,8 @@ class App:
             text(s, "ĐÁY" + (f"  (+{hidden} nút ẩn)" if hidden else ""), font("segoeui", 12, True), MUTED, (belt.x + 4, Q_Y + 8), "topleft")
             text(s, "ĐỈNH  (push / pop)", font("segoeui", 12, True), GREEN, (belt.right - 4, Q_Y + 8), "topright")
         else:
-            text(s, "HEAD  (dequeue)", font("segoeui", 12, True), GREEN, (belt.x + 4, Q_Y + 8), "topleft")
-            text(s, "TAIL  (enqueue)", font("segoeui", 12, True), ORANGE, (belt.right - 4, Q_Y + 8), "topright")
+            text(s, "ĐẦU: g nhỏ nhất  (pop)" if prio else "HEAD  (dequeue)", font("segoeui", 12, True), GREEN, (belt.x + 4, Q_Y + 8), "topleft")
+            text(s, "g lớn nhất  (push chèn theo g)" if prio else "TAIL  (enqueue)", font("segoeui", 12, True), ORANGE, (belt.right - 4, Q_Y + 8), "topright")
         clip = s.get_clip()
         setclip(s, belt.inflate(-4, 8))
         nodes = self.rec.nodes
@@ -1030,6 +1074,7 @@ class App:
             if not gone:
                 col = RED if eid == match else BLUE
                 G.rect(s, col, r.inflate(2, 2), 2 if eid != match else 3, border_radius=8)
+                self.cost_badge(s, r, nodes[eid].get("cost"))
         if ev["kind"] == "scan" and ev["frontier"]:
             fr = ev["frontier"]
             lim = fr.index(ev["scan_match"]) if ev["scan_match"] in fr else len(fr) - 1
@@ -1123,6 +1168,7 @@ class App:
                     elif k == pygame.K_v: self.press("replay")
                     elif k == pygame.K_b: self.press("alg_bfs")
                     elif k == pygame.K_d: self.press("alg_dfs")
+                    elif k == pygame.K_u: self.press("alg_ucs")
                     elif pygame.K_1 <= k <= pygame.K_3: self.press(f"p{k - pygame.K_1}")
                 if e.type == pygame.MOUSEBUTTONDOWN and e.button == 1:
                     m = self.to_canvas(e.pos)

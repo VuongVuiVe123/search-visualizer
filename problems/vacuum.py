@@ -64,15 +64,25 @@ def result_vacuum(state, action):
 
 
 # =====================================================================
-# 4. TẠO PROBLEM: Problem(initial, goal, actions_vacuum, result_vacuum)
+# 4. CHI PHÍ MỖI BƯỚC (UCS dùng): hút bụi tốn 1, sang trái / phải tốn 2
+# =====================================================================
+
+def step_cost_vacuum(state, action):
+    if action == "Suck":
+        return 1
+    return 2
+
+
+# =====================================================================
+# 5. TẠO PROBLEM: Problem(initial, goal, actions_vacuum, result_vacuum, step_cost_vacuum)
 # =====================================================================
 
 def make_problem(initial_state=INITIAL_STATE, goal_state=GOAL_STATE):
-    return Problem(tuple(initial_state), tuple(goal_state), actions_vacuum, result_vacuum)
+    return Problem(tuple(initial_state), tuple(goal_state), actions_vacuum, result_vacuum, step_cost_vacuum)
 
 
 # =====================================================================
-# 5. TIỆN ÍCH CHO GIAO DIỆN (không thuộc thuật toán)
+# 6. TIỆN ÍCH CHO GIAO DIỆN (không thuộc thuật toán)
 # =====================================================================
 
 def solvable(initial_state, goal_state):
