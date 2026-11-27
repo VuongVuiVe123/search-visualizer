@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Search Visualizer · trực quan hóa thuật toán tìm kiếm</title>
 <style>
-  :root { --bg: #0d111b; --panel: #141a28; --line: #222b40; --text: #e4eaf6; --muted: #7e8ca6; --cyan: #56d6e6; --pink: #ff7eaa; }
+  :root { --bg: #0d111b; --panel: #141a28; --line: #222b40; --text: #e4eaf6; --muted: #7e8ca6; --cyan: #56d6e6; --pink: #ff7eaa; --purple: #b092ff; }
   * { box-sizing: border-box; }
   body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--text);
          font: 16px/1.5 "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif; }
@@ -20,7 +20,7 @@
   a.card h2 { margin: 0 0 6px; font-size: 22px; }
   a.card p { margin: 0 0 14px; color: var(--muted); }
   .tags span { display: inline-block; margin: 0 6px 6px 0; padding: 2px 10px; border: 1px solid var(--line); border-radius: 999px; font-size: 13px; color: var(--muted); }
-  .tags .bfs { color: var(--cyan); border-color: #1f5a63; } .tags .dfs { color: var(--pink); border-color: #66324a; }
+  .tags .bfs { color: var(--cyan); border-color: #1f5a63; } .tags .dfs { color: var(--pink); border-color: #66324a; } .tags .ucs { color: var(--purple); border-color: #4a3d7a; }
   footer { margin-top: 48px; color: var(--muted); font-size: 14px; }
 </style>
 </head>
@@ -32,12 +32,12 @@
     <a class="card" href="web/puzzle8/">
       <h2>8-puzzle</h2>
       <p>Trượt ô trống trên bàn cờ 3×3 để về trạng thái đích. Tự đặt trạng thái đầu và đích.</p>
-      <div class="tags"><span class="bfs">BFS</span><span class="dfs">DFS</span></div>
+      <div class="tags"><span class="bfs">BFS</span><span class="dfs">DFS</span><span class="ucs">UCS</span></div>
     </a>
     <a class="card" href="web/vacuum/">
       <h2>Robot hút bụi</h2>
       <p>Robot đi qua nhiều phòng trong một ngôi nhà isometric để hút sạch bụi. Tự đặt số phòng, bụi và đích.</p>
-      <div class="tags"><span class="bfs">BFS</span><span class="dfs">DFS</span></div>
+      <div class="tags"><span class="bfs">BFS</span><span class="dfs">DFS</span><span class="ucs">UCS</span></div>
     </a>
   </div>
   <footer>Cần kết nối mạng khi mở lần đầu (tải Python chạy trong trình duyệt). Mã nguồn: <code>core/</code> (thuật toán), <code>problems/</code> (bài toán), <code>tracing/</code> (ghi từng bước), <code>web/</code> (giao diện).</footer>
