@@ -37,9 +37,10 @@ web/                     ④ GIAO DIỆN WEB (chỉ vẽ)
   puzzle8/               trang + view.js (vẽ bàn cờ 3x3)
   vacuum/                trang + view.js (vẽ ngôi nhà isometric)
   manifest.json          danh sách tệp Python trình duyệt cần nạp
-desktop/                 ④ GIAO DIỆN PYGAME (chỉ vẽ, dùng lại core/ problems/ tracing/)
-  ucs/                   bản CHỈ CHO UCS, mỗi app tách LOGIC và GIAO DIỆN (xem mục "Bản desktop UCS" bên dưới)
-  8puzzle_pygame.py      bản đủ BFS / DFS / UCS (một tệp, vừa vẽ vừa điều khiển)
+desktop/                 ④ GIAO DIỆN PYGAME (chạy local, dùng để nộp bài)
+  8puzzle_ucs.py         UCS cho 8-puzzle: MỘT TỆP tự chứa, chia rõ PHẦN 1 LOGIC và PHẦN 2 GIAO DIỆN
+  vacuum_ucs.py          UCS cho robot hút bụi: cùng cách chia
+  8puzzle_pygame.py      bản BFS / DFS / UCS dùng chung core/ problems/ tracing/ (một tệp, vừa vẽ vừa điều khiển)
   vacuum_pygame.py       như trên, cho robot hút bụi
 
 index.html               trang chủ (GitHub Pages cần tệp này ở thư mục gốc)
@@ -70,12 +71,13 @@ Quy tắc: tầng sau chỉ được dùng tầng trước. `core/` không biế
 | Lời giải thích hiện dưới khung code | `tracing/narration.py` | `caption` |
 | Tên, màu, giới hạn số nút của thuật toán | `tracing/algorithm_info.py` | `ALGORITHM_INFO` |
 | Cách giao diện biết dòng nào đang chạy | `tracing/tracer.py` | `Recording` |
-| Vẽ bàn cờ 8-puzzle | `web/puzzle8/view.js`, `desktop/ucs/puzzle8/boards.py` | `BigBoard`, `drawMiniBoard` / `blit_board` |
-| Vẽ ngôi nhà, robot | `web/vacuum/view.js`, `desktop/ucs/vacuum/scene.py` | `Scene`, `drawRobot` / `draw_robot` |
-| Bản desktop UCS: tải bài, bài mẫu, kiểm tra bài tự đặt, chạy lời giải | `desktop/ucs/common/session.py` | `UCSSession` |
-| Bản desktop UCS: nút Phát / Tiếp / Lùi / tốc độ | `desktop/ucs/common/playback.py` | `Player`, `SolutionReplay` |
-| Bản desktop UCS: hộp thoại "Tự đặt" (xử lý) | `desktop/ucs/puzzle8/logic.py`, `desktop/ucs/vacuum/logic.py` | `Puzzle8Editor`, `VacuumEditor` |
-| Bản desktop UCS: khung chung (đầu trang, bảng node, FRONTIER, ...) | `desktop/ucs/common/screen.py` | `UCSScreen` |
+| Vẽ bàn cờ 8-puzzle | `web/puzzle8/view.js`, `desktop/8puzzle_ucs.py` (mục 2.4) | `BigBoard`, `drawMiniBoard` / `blit_board` |
+| Vẽ ngôi nhà, robot | `web/vacuum/view.js`, `desktop/vacuum_ucs.py` (mục 2.4) | `Scene`, `drawRobot` / `draw_robot` |
+| Bản desktop UCS: hàm UCS, Node, hàng đợi ưu tiên | `desktop/8puzzle_ucs.py` mục 1.1 | `UCS`, `Node`, `push`, `pop` |
+| Bản desktop UCS: trạng thái đầu / đích / bài mẫu / chi phí | `desktop/8puzzle_ucs.py` mục 1.2 (robot: `vacuum_ucs.py`) | `INITIAL_STATE`, `PRESETS`, `step_cost_8puzzle` |
+| Bản desktop UCS: ghi từng dòng code đang chạy | mục 1.3 | `Recorder` |
+| Bản desktop UCS: nút Phát / Tiếp / Lùi, chạy lời giải, nạp bài, kiểm tra bài tự đặt | mục 1.4 | `Player`, `SolutionReplay`, `UCSSession`, `Puzzle8Editor` |
+| Bản desktop UCS: mọi thứ để vẽ | PHẦN 2 (từ dòng kẻ "Ranh giới") | `UCSScreen`, `Puzzle8Screen`, `Puzzle8Dialog` |
 
 ## Chạy thử
 
@@ -98,53 +100,33 @@ python -m http.server 8000
 Bản pygame (cần `pip install pygame`):
 
 ```
-python desktop/ucs/puzzle8/ui.py     # 8-puzzle, chỉ UCS
-python desktop/ucs/vacuum/ui.py      # robot hút bụi, chỉ UCS
-python desktop/8puzzle_pygame.py     # bản đủ BFS / DFS / UCS
+python desktop/8puzzle_ucs.py        # 8-puzzle, chỉ UCS, một tệp tự chứa
+python desktop/vacuum_ucs.py         # robot hút bụi, chỉ UCS, một tệp tự chứa
+python desktop/8puzzle_ucs.py --console   # chỉ phần LOGIC, in lời giải ra màn hình, không cần pygame
+python desktop/8puzzle_pygame.py     # bản BFS / DFS / UCS dùng chung core/ problems/ tracing/
 python desktop/vacuum_pygame.py
 ```
 
 ## Nộp bài bản desktop UCS
 
-`desktop/ucs/` đọc thuật toán từ `core/`, bài toán từ `problems/`, bộ ghi từ `tracing/` (dùng chung với bản web),
-nên **không nộp riêng thư mục `desktop/`**. Hãy đóng gói bằng một lệnh:
+Chỉ cần nộp **hai tệp** `desktop/8puzzle_ucs.py` và `desktop/vacuum_ucs.py`. Mỗi tệp tự chứa đủ (hàm UCS, bài toán, bộ ghi từng dòng,
+giao diện), không cần `core/`, `problems/`, `tracing/` hay thư mục nào khác. Máy chạy chỉ cần Python 3.8 trở lên và `pip install pygame`.
+
+Trong mỗi tệp, một dòng kẻ lớn ("Ranh giới") chia đôi:
 
 ```
-python desktop/ucs/make_submission.py
+PHẦN 1  LOGIC (không dùng pygame)
+    1.1  Thuật toán UCS               Node, Problem, PriorityQueue, child_node, solution, find_in_frontier, UCS
+    1.2  Bài toán                     trạng thái đầu / đích, actions, result, chi phí mỗi bước, bài mẫu
+    1.3  Ghi lại từng dòng của UCS    Recorder: chạy chính hàm UCS dưới sys.settrace, ghi một "sự kiện" sau mỗi dòng
+    1.4  Phát lại và phiên làm việc   Player, SolutionReplay, UCSSession, hộp thoại "Tự đặt" (mô hình)
+------------------------------------  Ranh giới: phía trên không dùng pygame; --console dừng ở đây
+PHẦN 2  GIAO DIỆN (pygame), chỉ vẽ và nhận phím / chuột, gọi sang phần 1 để làm việc
+    2.1  Bảng màu   2.2  Bộ vẽ nhỏ   2.3  Khung màn hình chung   2.4  Hình vẽ riêng   2.5  Màn hình và hộp thoại   2.6  main
 ```
 
-Lệnh này tạo `dist/bai_nop_ucs/` và `dist/bai_nop_ucs.zip` (khoảng 60 KB) gồm đúng những thư mục cần thiết, không sửa một dòng code nào,
-rồi tự chạy thử bản vừa lắp trong một tiến trình sạch trước khi nén. Đặt tên khác bằng `--name TEN_BAI`.
-
-Giáo viên giải nén, cài `pip install pygame`, rồi chạy `python chay_8puzzle.py` hoặc `python chay_vacuum.py`
-(trong zip có `README.txt` hướng dẫn và chỉ chỗ tìm thuật toán, bài toán, giao diện). Thiếu pygame hoặc thiếu thư mục
-thì app báo lỗi bằng tiếng Việt thay vì in traceback (xem `desktop/ucs/common/preflight.py`).
-
-## Bản desktop UCS: tách logic và giao diện
-
-```
-desktop/ucs/
-  make_submission.py  đóng gói bài nộp (xem mục trên)
-  common/
-    preflight.py    kiểm tra môi trường, báo lỗi tiếng Việt khi thiếu pygame hoặc thư mục
-    playback.py     LOGIC  Player (phát / dừng / tiếp / lùi / node kế / tốc độ), SolutionReplay (chạy lời giải)
-    session.py      LOGIC  UCSSession: giữ bài toán, bài mẫu, bản ghi UCS; load / random / check bài tự đặt
-    theme.py        UI     bảng màu
-    kit.py          UI     bộ vẽ nhỏ: chữ, khung, nút, tô màu mã nguồn
-    screen.py       UI     UCSScreen: khung chung của cả hai app (đầu trang, mã nguồn, bảng node, FRONTIER, EXPLORED, nút)
-  puzzle8/
-    logic.py        LOGIC  Puzzle8Session, Puzzle8Editor (đổi ô, xáo, đích chuẩn, kiểm tra, áp dụng)
-    boards.py       UI     vẽ bàn cờ 3x3
-    ui.py           UI     Puzzle8Screen, hộp thoại; chạy được: python desktop/ucs/puzzle8/ui.py
-  vacuum/
-    logic.py        LOGIC  VacuumSession, VacuumEditor (số phòng, robot, bụi, đích)
-    scene.py        UI     vẽ ngôi nhà isometric và robot
-    cards.py        UI     vẽ thẻ trạng thái
-    ui.py           UI     VacuumScreen, hộp thoại; chạy được: python desktop/ucs/vacuum/ui.py
-```
-
-Các tệp **LOGIC** không import pygame, chạy và kiểm tra được mà không cần màn hình. Các tệp **UI** chỉ vẽ và
-nhận phím / chuột rồi gọi sang logic. Thuật toán UCS vẫn nằm ở `core/algorithms/ucs.py`.
+Hai tệp này có bản sao của hàm UCS và bài toán, nên khi sửa `core/algorithms/ucs.py` hay `problems/*.py`, bản desktop UCS không tự đổi theo
+(và ngược lại). Bản web và `run_console.py` vẫn dùng `core/`, `problems/`, `tracing/`.
 
 ## Thêm thuật toán mới (vd. IDS, A*)
 
