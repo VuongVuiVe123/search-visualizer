@@ -104,11 +104,29 @@ python desktop/8puzzle_pygame.py     # bản đủ BFS / DFS / UCS
 python desktop/vacuum_pygame.py
 ```
 
+## Nộp bài bản desktop UCS
+
+`desktop/ucs/` đọc thuật toán từ `core/`, bài toán từ `problems/`, bộ ghi từ `tracing/` (dùng chung với bản web),
+nên **không nộp riêng thư mục `desktop/`**. Hãy đóng gói bằng một lệnh:
+
+```
+python desktop/ucs/make_submission.py
+```
+
+Lệnh này tạo `dist/bai_nop_ucs/` và `dist/bai_nop_ucs.zip` (khoảng 60 KB) gồm đúng những thư mục cần thiết, không sửa một dòng code nào,
+rồi tự chạy thử bản vừa lắp trong một tiến trình sạch trước khi nén. Đặt tên khác bằng `--name TEN_BAI`.
+
+Giáo viên giải nén, cài `pip install pygame`, rồi chạy `python chay_8puzzle.py` hoặc `python chay_vacuum.py`
+(trong zip có `README.txt` hướng dẫn và chỉ chỗ tìm thuật toán, bài toán, giao diện). Thiếu pygame hoặc thiếu thư mục
+thì app báo lỗi bằng tiếng Việt thay vì in traceback (xem `desktop/ucs/common/preflight.py`).
+
 ## Bản desktop UCS: tách logic và giao diện
 
 ```
 desktop/ucs/
+  make_submission.py  đóng gói bài nộp (xem mục trên)
   common/
+    preflight.py    kiểm tra môi trường, báo lỗi tiếng Việt khi thiếu pygame hoặc thư mục
     playback.py     LOGIC  Player (phát / dừng / tiếp / lùi / node kế / tốc độ), SolutionReplay (chạy lời giải)
     session.py      LOGIC  UCSSession: giữ bài toán, bài mẫu, bản ghi UCS; load / random / check bài tự đặt
     theme.py        UI     bảng màu

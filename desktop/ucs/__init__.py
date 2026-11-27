@@ -11,4 +11,6 @@ Thuật toán UCS nằm ở core/algorithms/ucs.py, bài toán ở problems/, gh
     common/    phần dùng chung của hai app (logic: playback.py, session.py · giao diện: theme.py, kit.py, screen.py)
     puzzle8/   app 8-puzzle   → python desktop/ucs/puzzle8/ui.py
     vacuum/    app robot hút bụi → python desktop/ucs/vacuum/ui.py
+
+Nộp bài: python desktop/ucs/make_submission.py  (tạo dist/bai_nop_ucs.zip tự chứa đủ, giáo viên giải nén là chạy được)
 """

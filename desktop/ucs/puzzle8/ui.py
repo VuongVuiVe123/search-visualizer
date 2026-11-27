@@ -11,6 +11,10 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
 
+from desktop.ucs.common.preflight import check_environment  # noqa: E402
+
+check_environment()         # báo lỗi tiếng Việt nếu thiếu pygame hoặc thiếu thư mục, trước khi nạp pygame
+
 import pygame  # noqa: E402
 
 from desktop.ucs.common import kit  # noqa: E402
